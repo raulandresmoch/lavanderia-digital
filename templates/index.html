@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Lavandería Digital</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body>
+    <h1>Nuevo Pedido</h1>
+    <form method="POST">
+        <input type="text" name="nombre" placeholder="Nombre" required><br>
+        <input type="text" name="direccion" placeholder="Dirección" required><br>
+        <input type="text" id="fecha_recoleccion" name="fecha_recoleccion" placeholder="Fecha de recolección" required><br>
+        <input type="text" id="fecha_entrega" name="fecha_entrega" placeholder="Fecha de entrega" required><br>
+        <textarea name="notas" placeholder="Notas adicionales"></textarea><br>
+        <button type="submit">Guardar Pedido</button>
+    </form>
+
+    <h2>Pedidos Registrados</h2>
+    <ul>
+        {% for pedido in pedidos %}
+            <li><strong>{{ pedido.nombre }}</strong> ({{ pedido.fecha_recoleccion.date() }} → {{ pedido.fecha_entrega.date() }})</li>
+        {% endfor %}
+    </ul>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        flatpickr("#fecha_recoleccion", { dateFormat: "Y-m-d" });
+        flatpickr("#fecha_entrega", { dateFormat: "Y-m-d" });
+    </script>
+</body>
+</html>
