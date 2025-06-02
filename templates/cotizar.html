@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizar Servicio - Lavandería Digital</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.home') }}">
+                <i class="fas fa-tshirt me-2"></i>Lavandería Digital
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.mis_pedidos') }}">Mis Pedidos</a>
+                <a class="nav-link" href="{{ url_for('main.logout') }}">Cerrar Sesión</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0"><i class="fas fa-calculator me-2"></i>Cotizar Servicio</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Paso 1: Selección de prendas -->
+                        <div id="paso1">
+                            <h5 class="text-primary mb-3">Paso 1: Selecciona tus prendas</h5>
+                            <form id="cotizacionForm">
+                                <div id="items-container">
+                                    {% for tipo in tipos_prenda %}
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-6">
+                                                    <h6 class="card-title">{{ tipo.nombre }}</h6>
+                                                    <p class="card-text text-muted small">{{ tipo.descripcion or 'Servicio de lavandería profesional' }}</p>
+                                                    <span class="badge bg-success">${{ "%.2f" | format(tipo.precio_por_kg) }} por kg</span>
+                                                    <span class="badge bg-info">{{ tipo.tiempo_lavado_horas }}h de proceso</span>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="input-group">
+                                                        <span class="input-group-text">Kg</span>
+                                                        <input type="number" 
+                                                               class="form-control cantidad-input" 
+                                                               data-tipo-id="{{ tipo.id }}"
+                                                               data-precio="{{ tipo.precio_por_kg }}"
+                                                               data-tiempo="{{ tipo.tiempo_lavado_horas }}"
+                                                               step="0.5" 
+                                                               min="0" 
+                                                               max="50"
+                                                               placeholder="0">
+                                                        <span class="input-group-text">kg</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="row mt-4">
+                                    <div class="col-md-6">
+                                        <label for="fechaRecoleccion" class="form-label">Fecha de Recolección</label>
+                                        <input type="date" class="form-control" id="fechaRecoleccion" required>
+                                        <div class="form-text">Solo mañanas (9:00-12:00)</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="direccion" class="form-label">Dirección de Recolección</label>
+                                        <textarea class="form-control" id="direccion" rows="2" placeholder="Calle, número, colonia, referencias..."></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <label for="notas" class="form-label">Notas Especiales (Opcional)</label>
+                                    <textarea class="form-control" id="notas" rows="2" placeholder="Instrucciones especiales, manchas difíciles, etc."></textarea>
+                                </div>
+
+                                <div class="d-grid mt-4">
+                                    <button type="button" class="btn btn-primary btn-lg" onclick="calcularCotizacion()">
+                                        <i class="fas fa-calculator me-2"></i>Calcular Cotización
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Paso 2: Mostrar cotización -->
+                        <div id="paso2" style="display: none;">
+                            <h5 class="text-success mb-3">Paso 2: Tu Cotización</h5>
+                            <div id="resultado-cotizacion"></div>
+                            
+                            <div class="d-flex gap-2 mt-4">
+                                <button type="button" class="btn btn-secondary" onclick="volverPaso1()">
+                                    <i class="fas fa-arrow-left me-2"></i>Modificar
+                                </button>
+                                <button type="button" class="btn btn-success flex-fill" onclick="confirmarPedido()">
+                                    <i class="fas fa-check me-2"></i>Confirmar Pedido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert container -->
+    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let cotizacionActual = null;
+
+        // Configurar fechas mínimas
+        document.addEventListener('DOMContentLoaded', function() {
+            const fechaInput = document.getElementById('fechaRecoleccion');
+            const mañana = new Date();
+            mañana.setDate(mañana.getDate() + 1);
+            fechaInput.min = mañana.toISOString().split('T')[0];
+        });
+
+        function mostrarAlerta(mensaje, tipo = 'info') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertId = 'alert-' + Date.now();
+            
+            const alertHTML = `
+                <div id="${alertId}" class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+                    ${mensaje}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertContainer.insertAdjacentHTML('beforeend', alertHTML);
+            
+            // Auto-dismiss después de 5 segundos
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+
+        function calcularCotizacion() {
+            const items = [];
+            const cantidadInputs = document.querySelectorAll('.cantidad-input');
+            
+            cantidadInputs.forEach(input => {
+                const cantidad = parseFloat(input.value) || 0;
+                if (cantidad > 0) {
+                    items.push({
+                        tipo_prenda_id: parseInt(input.dataset.tipoId),
+                        cantidad: cantidad,
+                        precio_unitario: parseFloat(input.dataset.precio)
+                    });
+                }
+            });
+
+            if (items.length === 0) {
+                mostrarAlerta('Por favor selecciona al menos un tipo de prenda', 'warning');
+                return;
+            }
+
+            const fechaRecoleccion = document.getElementById('fechaRecoleccion').value;
+            if (!fechaRecoleccion) {
+                mostrarAlerta('Por favor selecciona una fecha de recolección', 'warning');
+                return;
+            }
+
+            // Enviar cotización al servidor
+            fetch('/api/calcular-cotizacion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    items: items,
+                    fecha_recoleccion: fechaRecoleccion
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    cotizacionActual = data;
+                    mostrarCotizacion(data);
+                } else {
+                    mostrarAlerta(data.error || 'Error al calcular cotización', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarAlerta('Error de conexión', 'danger');
+            });
+        }
+
+        function mostrarCotizacion(data) {
+            let detallesHTML = '<div class="table-responsive"><table class="table table-sm">';
+            detallesHTML += '<thead><tr><th>Tipo</th><th>Cantidad</th><th>Precio/kg</th><th>Subtotal</th></tr></thead><tbody>';
+            
+            data.detalles.forEach(item => {
+                detallesHTML += `
+                    <tr>
+                        <td>${item.tipo}</td>
+                        <td>${item.cantidad} kg</td>
+                        <td>$${item.precio_unitario.toFixed(2)}</td>
+                        <td>$${item.subtotal.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+            
+            detallesHTML += '</tbody></table></div>';
+
+            const resultadoHTML = `
+                <div class="card border-success">
+                    <div class="card-body">
+                        ${detallesHTML}
+                        <hr>
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <strong>Fecha de Recolección:</strong><br>
+                                ${new Date(document.getElementById('fechaRecoleccion').value + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
+                                <br><small class="text-muted">Horario: Mañana (9:00-12:00)</small>
+                            </div>
+                            <div class="col-sm-6">
+                                <strong>Fecha de Entrega:</strong><br>
+                                ${new Date(data.fecha_entrega + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
+                                <br><small class="text-muted">Horario: Tarde (14:00-18:00)</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="text-center">
+                            <h4 class="text-success mb-0">Total: $${data.total.toFixed(2)}</h4>
+                            <small class="text-muted">Servicio en ${data.dias_servicio} día${data.dias_servicio > 1 ? 's' : ''}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('resultado-cotizacion').innerHTML = resultadoHTML;
+            document.getElementById('paso1').style.display = 'none';
+            document.getElementById('paso2').style.display = 'block';
+        }
+
+        function volverPaso1() {
+            document.getElementById('paso1').style.display = 'block';
+            document.getElementById('paso2').style.display = 'none';
+        }
+
+        function confirmarPedido() {
+            if (!cotizacionActual) {
+                mostrarAlerta('Error: No hay cotización activa', 'danger');
+                return;
+            }
+
+            const direccion = document.getElementById('direccion').value.trim();
+            if (!direccion) {
+                mostrarAlerta('Por favor ingresa la dirección de recolección', 'warning');
+                return;
+            }
+
+            const items = [];
+            const cantidadInputs = document.querySelectorAll('.cantidad-input');
+            cantidadInputs.forEach(input => {
+                const cantidad = parseFloat(input.value) || 0;
+                if (cantidad > 0) {
+                    items.push({
+                        tipo_prenda_id: parseInt(input.dataset.tipoId),
+                        cantidad: cantidad,
+                        precio_unitario: parseFloat(input.dataset.precio),
+                        subtotal: cantidad * parseFloat(input.dataset.precio)
+                    });
+                }
+            });
+
+            const pedidoData = {
+                items: items,
+                fecha_recoleccion: document.getElementById('fechaRecoleccion').value,
+                fecha_entrega: cotizacionActual.fecha_entrega,
+                precio_total: cotizacionActual.total,
+                direccion: direccion,
+                notas: document.getElementById('notas').value,
+                peso_estimado: items.reduce((sum, item) => sum + item.cantidad, 0)
+            };
+
+            fetch('/confirmar-pedido', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(pedidoData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('¡Pedido confirmado exitosamente!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/mis-pedidos';
+                    }, 2000);
+                } else {
+                    mostrarAlerta(data.error || 'Error al confirmar pedido', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarAlerta('Error de conexión', 'danger');
+            });
+        }
+    </script>
+</body>
+</html>

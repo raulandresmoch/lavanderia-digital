@@ -1,23 +1,16 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from dotenv import load_dotenv
+from .extensions import db
+from .routes import main
 import os
 
-db = SQLAlchemy()
-
 def create_app():
-    load_dotenv()
+    app = Flask(__name__, template_folder="../templates", static_folder="../static")
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lavanderia.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.secret_key = os.environ.get("SECRET_KEY", "supersecreto")
 
-    app = Flask(__name__)
-    CORS(app)
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///lavanderia.db")
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
-
-    from .routes import main
     app.register_blueprint(main)
 
     with app.app_context():
