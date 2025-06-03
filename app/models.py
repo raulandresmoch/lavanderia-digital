@@ -57,6 +57,15 @@ class ItemPedido(db.Model):
     tipo_prenda = db.relationship('TipoPrenda', backref='items')
 
 # Tabla para configuración del sistema
+class Admin(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    usuario = db.Column(db.String(50), unique=True, nullable=False)
+    contrasena = db.Column(db.String(200), nullable=False)
+    nombre = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), nullable=False)
+    activo = db.Column(db.Boolean, default=True)
+    creado = db.Column(db.DateTime, default=datetime.utcnow)
+
 class Configuracion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     clave = db.Column(db.String(50), unique=True, nullable=False)
@@ -79,3 +88,42 @@ class Configuracion(db.Model):
             config = Configuracion(clave=clave, valor=valor, descripcion=descripcion)
             db.session.add(config)
         db.session.commit()
+
+# Funciones auxiliares para estadísticas
+class EstadisticasPedidos:
+    @staticmethod
+    def pedidos_hoy():
+        hoy = datetime.now().date()
+        return Pedido.query.filter(Pedido.fecha_recoleccion == hoy).count()
+    
+    @staticmethod
+    def pedidos_por_estado():
+        from sqlalchemy import func
+        return db.session.query(
+            Pedido.estado, 
+            func.count(Pedido.id).label('cantidad')
+        ).group_by(Pedido.estado).all()
+    
+    @staticmethod
+    def ingresos_mes_actual():
+        from sqlalchemy import func, extract
+        mes_actual = datetime.now().month
+        año_actual = datetime.now().year
+        
+        result = db.session.query(
+            func.sum(Pedido.precio_total).label('total')
+        ).filter(
+            extract('month', Pedido.creado) == mes_actual,
+            extract('year', Pedido.creado) == año_actual,
+            Pedido.estado != 'Cancelado'
+        ).first()
+        
+        return result.total if result.total else 0
+    
+    @staticmethod
+    def pedidos_por_zona():
+        from sqlalchemy import func
+        return db.session.query(
+            func.substr(Pedido.direccion, 1, 20).label('zona'),
+            func.count(Pedido.id).label('cantidad')
+        ).group_by('zona').limit(10).all()
