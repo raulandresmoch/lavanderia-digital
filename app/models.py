@@ -160,6 +160,23 @@ class Admin(db.Model):
     email = db.Column(db.String(100), nullable=False)
     activo = db.Column(db.Boolean, default=True)
     creado = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Admin {self.usuario}>'
+    
+    @staticmethod
+    def crear_admin_por_defecto():
+        """Crear admin por defecto si no existe ninguno"""
+        if not Admin.query.first():
+            from werkzeug.security import generate_password_hash
+            admin = Admin(
+                usuario="admin",
+                contrasena=generate_password_hash("admin123"),
+                nombre="Administrador",
+                email="admin@lavanderia-digital.com"
+            )
+            return admin
+        return None
 
 # Tabla para configuración del sistema
 class Configuracion(db.Model):

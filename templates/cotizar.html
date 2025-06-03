@@ -554,48 +554,6 @@ function mostrarAlerta(mensaje, tipo = 'info') {
     }, 5000);
 }
 
-function ocultarModalLoading() {
-    try {
-        // Método 1: Bootstrap Modal
-        const loadingModalElement = document.getElementById('loadingModal');
-        if (loadingModalElement) {
-            const modalInstance = bootstrap.Modal.getInstance(loadingModalElement);
-            if (modalInstance) {
-                modalInstance.hide();
-            }
-        }
-        
-        // Método 2: Forzar ocultación manual
-        setTimeout(() => {
-            const modal = document.getElementById('loadingModal');
-            if (modal) {
-                modal.style.display = 'none';
-                modal.classList.remove('show');
-                modal.setAttribute('aria-hidden', 'true');
-                modal.removeAttribute('aria-modal');
-                modal.removeAttribute('role');
-            }
-            
-            // Remover backdrop si existe
-            const backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) {
-                backdrop.remove();
-            }
-            
-            // Remover clase del body
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        }, 100);
-        
-    } catch (error) {
-        console.log('Error ocultando modal:', error);
-        // Fallback manual
-        const modal = document.getElementById('loadingModal');
-        if (modal) modal.style.display = 'none';
-    }
-}
-
 function calcularCotizacion() {
     const items = [];
     const cantidadInputs = document.querySelectorAll('.cantidad-input');
@@ -636,14 +594,11 @@ function calcularCotizacion() {
         }
     }
 
-    // Mostrar modal de loading
-    const loadingModalElement = document.getElementById('loadingModal');
-    let loadingModal = null;
-    
-    if (loadingModalElement) {
-        loadingModal = new bootstrap.Modal(loadingModalElement);
-        loadingModal.show();
-    }
+    // SOLUCIÓN: SIN MODAL - Solo deshabilitar botón y mostrar texto
+    const botonCalcular = document.querySelector('button[onclick="calcularCotizacion()"]');
+    const textoOriginal = botonCalcular.innerHTML;
+    botonCalcular.disabled = true;
+    botonCalcular.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Calculando...';
 
     // Preparar datos para envío
     const requestData = {
@@ -675,8 +630,9 @@ function calcularCotizacion() {
     .then(data => {
         console.log('✅ Response data:', data);
         
-        // IMPORTANTE: Ocultar modal ANTES de procesar datos
-        ocultarModalLoading();
+        // Restaurar botón
+        botonCalcular.disabled = false;
+        botonCalcular.innerHTML = textoOriginal;
         
         if (data.success) {
             cotizacionActual = data;
@@ -688,10 +644,11 @@ function calcularCotizacion() {
     .catch(error => {
         console.error('❌ Error completo:', error);
         
-        // IMPORTANTE: Ocultar modal en caso de error también
-        ocultarModalLoading();
+        // Restaurar botón
+        botonCalcular.disabled = false;
+        botonCalcular.innerHTML = textoOriginal;
         
-        // Mostrar error más específico
+        // Mostrar error
         if (error.message.includes('Failed to fetch')) {
             mostrarAlerta('❌ Error de conexión. Verifica tu internet y que el servidor esté funcionando.', 'danger');
         } else if (error.message.includes('404')) {
@@ -705,8 +662,46 @@ function calcularCotizacion() {
 }
 
 function mostrarCotizacion(data) {
-    // Asegurar que el modal esté oculto
-    ocultarModalLoading();
+    // SOLUCIÓN AGRESIVA: Forzar ocultación del modal por todos los métodos posibles
+    try {
+        // Método 1: Bootstrap Modal
+        const loadingModalElement = document.getElementById('loadingModal');
+        if (loadingModalElement) {
+            const modalInstance = bootstrap.Modal.getInstance(loadingModalElement);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
+    } catch (error) {
+        console.log('Error método 1:', error);
+    }
+    
+    // Método 2: Ocultación manual agresiva
+    setTimeout(() => {
+        try {
+            const modal = document.getElementById('loadingModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.removeAttribute('aria-modal');
+                modal.removeAttribute('role');
+            }
+            
+            // Remover backdrop forzadamente
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            
+            // Limpiar clases del body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            
+            console.log('✅ Modal ocultado forzadamente');
+        } catch (error) {
+            console.log('Error método 2:', error);
+        }
+    }, 50);
     
     // Actualizar indicadores de pasos
     document.getElementById('step1').classList.remove('active');
@@ -821,7 +816,6 @@ function mostrarCotizacion(data) {
     document.getElementById('paso1').style.display = 'none';
     document.getElementById('paso2').style.display = 'block';
 }
-
 function volverPaso1() {
     // Actualizar indicadores de pasos
     document.getElementById('step1').classList.add('active');
