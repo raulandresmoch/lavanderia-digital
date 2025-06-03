@@ -6,11 +6,46 @@
   <title>Registro de Usuario - Lavandería Digital</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 400px;
+      width: 100%;
+      border-radius: 8px;
+      border: 2px solid #dee2e6;
+    }
+    .map-instructions {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+    .address-suggestion {
+      cursor: pointer;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .address-suggestion:hover {
+      background-color: #f8f9fa;
+    }
+    .zona-warning {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+    }
+    .zona-success {
+      background: #d1edff;
+      border: 1px solid #74c0fc;
+      color: #0c5460;
+    }
+  </style>
 </head>
 <body class="bg-light">
   <div class="container">
-    <div class="row justify-content-center min-vh-100 align-items-center">
-      <div class="col-md-6 col-lg-5">
+    <div class="row justify-content-center min-vh-100 align-items-center py-4">
+      <div class="col-md-8 col-lg-7">
         <div class="card shadow">
           <div class="card-header bg-primary text-white text-center">
             <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Registro de Usuario</h4>
@@ -27,36 +62,110 @@
               {% endif %}
             {% endwith %}
             
-            <form action="/registrar" method="POST">
-              <div class="mb-3">
-                <label for="nombre" class="form-label">Nombre completo</label>
-                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Tu nombre completo" required />
+            <form id="registroForm" action="/registrar" method="POST">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="nombre" class="form-label">Nombre completo</label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Tu nombre completo" required />
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="email" class="form-label">Correo electrónico</label>
+                    <input type="email" class="form-control" id="email" name="email" placeholder="tu@email.com" required />
+                  </div>
+                </div>
               </div>
               
-              <div class="mb-3">
-                <label for="email" class="form-label">Correo electrónico</label>
-                <input type="email" class="form-control" id="email" name="email" placeholder="tu@email.com" required />
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="55 1234 5678" />
+                    <div class="form-text">Para notificaciones de recolección</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="contrasena" class="form-label">Contraseña</label>
+                    <input type="password" class="form-control" id="contrasena" name="contrasena" placeholder="Mínimo 6 caracteres" required />
+                  </div>
+                </div>
               </div>
               
-              <div class="mb-3">
-                <label for="telefono" class="form-label">Teléfono</label>
-                <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="55 1234 5678" />
-                <div class="form-text">Opcional - Para notificaciones de recolección</div>
-              </div>
-              
-              <div class="mb-3">
-                <label for="contrasena" class="form-label">Contraseña</label>
-                <input type="password" class="form-control" id="contrasena" name="contrasena" placeholder="Mínimo 6 caracteres" required />
-              </div>
-              
+              <!-- Sección de Ubicación -->
               <div class="mb-4">
-                <label for="ubicacion" class="form-label">Dirección / Colonia</label>
-                <textarea class="form-control" id="ubicacion" name="ubicacion" rows="2" placeholder="Calle, número, colonia..." required></textarea>
-                <div class="form-text">Necesario para calcular rutas de recolección</div>
+                <label class="form-label">📍 Tu Primera Dirección</label>
+                
+                <div class="map-instructions">
+                  <i class="fas fa-info-circle me-2"></i>
+                  <strong>Instrucciones:</strong> Agrega tu primera dirección (generalmente "Casa"). Podrás agregar más direcciones después.
+                </div>
+                
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="nombre_direccion" class="form-label">Nombre de la dirección</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="nombre_direccion" 
+                           name="nombre_direccion" 
+                           value="Casa" 
+                           placeholder="Casa, Trabajo, Casa de mamá..." 
+                           required />
+                  </div>
+                  <div class="col-md-6">
+                    <label for="notas_direccion" class="form-label">Referencias (opcional)</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="notas_direccion" 
+                           name="notas_direccion" 
+                           placeholder="Casa verde, portón café..." />
+                  </div>
+                </div>
+                
+                <div class="input-group mb-3">
+                  <span class="input-group-text"><i class="fas fa-search"></i></span>
+                  <input type="text" 
+                         class="form-control" 
+                         id="buscarDireccion" 
+                         placeholder="Escribe tu dirección (ej: Av Reforma 123, Roma Norte)" 
+                         autocomplete="off" />
+                  <button type="button" class="btn btn-outline-primary" id="buscarBtn">
+                    <i class="fas fa-search"></i>
+                  </button>
+                </div>
+                
+                <!-- Sugerencias de direcciones -->
+                <div id="sugerencias" class="list-group mb-3" style="display: none;"></div>
+                
+                <!-- Mapa -->
+                <div id="map"></div>
+                
+                <!-- Información de la ubicación seleccionada -->
+                <div id="ubicacionInfo" class="mt-3" style="display: none;">
+                  <div class="alert zona-success" id="zonaStatus">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <span id="ubicacionTexto"></span>
+                  </div>
+                </div>
+                
+                <!-- Campo oculto para la dirección final -->
+                <textarea class="form-control mt-2" 
+                         id="ubicacion" 
+                         name="ubicacion" 
+                         rows="2" 
+                         placeholder="Tu dirección aparecerá aquí automáticamente..." 
+                         required 
+                         readonly></textarea>
+                
+                <!-- Campos ocultos para coordenadas -->
+                <input type="hidden" id="latitud" name="latitud" />
+                <input type="hidden" id="longitud" name="longitud" />
               </div>
               
               <div class="d-grid">
-                <button type="submit" class="btn btn-primary btn-lg">
+                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                   <i class="fas fa-check me-2"></i>Registrarse
                 </button>
               </div>
@@ -70,6 +179,324 @@
     </div>
   </div>
   
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <script>
+    let mapa = null;
+    let marcador = null;
+    let coordenadasSeleccionadas = null;
+    
+    // Coordenadas del centro de Ciudad de México
+    const CENTRO_CDMX = [19.4326, -99.1332];
+    
+    // Inicializar mapa
+    function inicializarMapa() {
+      mapa = L.map('map').setView(CENTRO_CDMX, 12);
+      
+      // Agregar capa de OpenStreetMap
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(mapa);
+      
+      // Manejar clicks en el mapa
+      mapa.on('click', function(e) {
+        seleccionarUbicacion(e.latlng.lat, e.latlng.lng);
+      });
+      
+      // Crear zona de cobertura (círculo aproximado)
+      const zonaCobertura = L.circle(CENTRO_CDMX, {
+        color: 'blue',
+        fillColor: 'lightblue',
+        fillOpacity: 0.2,
+        radius: 25000 // 25km
+      }).addTo(mapa);
+      
+      zonaCobertura.bindPopup('Zona de cobertura de Lavandería Digital');
+    }
+    
+    function seleccionarUbicacion(lat, lng) {
+      // Remover marcador anterior
+      if (marcador) {
+        mapa.removeLayer(marcador);
+      }
+      
+      // Agregar nuevo marcador
+      marcador = L.marker([lat, lng], {
+        draggable: true
+      }).addTo(mapa);
+      
+      // Permitir arrastrar el marcador
+      marcador.on('dragend', function(e) {
+        const pos = e.target.getLatLng();
+        seleccionarUbicacion(pos.lat, pos.lng);
+      });
+      
+      // Guardar coordenadas
+      coordenadasSeleccionadas = {lat: lat, lng: lng};
+      document.getElementById('latitud').value = lat;
+      document.getElementById('longitud').value = lng;
+      
+      // Obtener dirección de las coordenadas
+      obtenerDireccionDeCoordenadas(lat, lng);
+      
+      // Verificar zona de cobertura
+      verificarZonaCobertura(lat, lng);
+    }
+    
+    function obtenerDireccionDeCoordenadas(lat, lng) {
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`, {
+        headers: {
+          'User-Agent': 'Lavanderia-Digital/1.0'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        const direccion = formatearDireccion(data);
+        document.getElementById('ubicacion').value = direccion;
+        document.getElementById('ubicacionTexto').textContent = direccion;
+        document.getElementById('ubicacionInfo').style.display = 'block';
+      })
+      .catch(error => {
+        console.error('Error obteniendo dirección:', error);
+        document.getElementById('ubicacion').value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+      });
+    }
+    
+    function formatearDireccion(data) {
+      const addr = data.address || {};
+      const componentes = [];
+      
+      if (addr.house_number && addr.road) {
+        componentes.push(`${addr.road} ${addr.house_number}`);
+      } else if (addr.road) {
+        componentes.push(addr.road);
+      }
+      
+      if (addr.neighbourhood) {
+        componentes.push(addr.neighbourhood);
+      } else if (addr.suburb) {
+        componentes.push(addr.suburb);
+      }
+      
+      if (addr.city_district) {
+        componentes.push(addr.city_district);
+      }
+      
+      componentes.push('Ciudad de México');
+      
+      return componentes.join(', ');
+    }
+    
+    function verificarZonaCobertura(lat, lng) {
+      const zonaStatus = document.getElementById('zonaStatus');
+      const ubicacionInfo = document.getElementById('ubicacionInfo');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      // Verificar si está en zona de cobertura (aproximada)
+      const centro = CENTRO_CDMX;
+      const distancia = calcularDistancia(lat, lng, centro[0], centro[1]);
+      
+      if (distancia <= 25) { // 25km de radio
+        zonaStatus.className = 'alert zona-success';
+        zonaStatus.innerHTML = `
+          <i class="fas fa-check-circle me-2"></i>
+          <strong>¡Perfecto!</strong> Tu ubicación está dentro de nuestra zona de cobertura.
+          <br><span id="ubicacionTexto"></span>
+        `;
+        submitBtn.disabled = false;
+      } else {
+        zonaStatus.className = 'alert zona-warning';
+        zonaStatus.innerHTML = `
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Zona no cubierta:</strong> Tu ubicación está fuera de nuestra área de servicio actual.
+          <br><span id="ubicacionTexto"></span>
+          <br><small>Contáctanos para verificar disponibilidad en tu zona.</small>
+        `;
+        submitBtn.disabled = true;
+      }
+    }
+    
+    function calcularDistancia(lat1, lng1, lat2, lng2) {
+      const R = 6371; // Radio de la Tierra en km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+    
+    function buscarDireccion() {
+      const query = document.getElementById('buscarDireccion').value.trim();
+      if (query.length < 3) return;
+      
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Ciudad de México, México')}&format=json&limit=5&addressdetails=1&countrycodes=mx`;
+      
+      fetch(url, {
+        headers: {
+          'User-Agent': 'Lavanderia-Digital/1.0'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        mostrarSugerencias(data);
+      })
+      .catch(error => {
+        console.error('Error en búsqueda:', error);
+      });
+    }
+    
+    function mostrarSugerencias(resultados) {
+      const contenedor = document.getElementById('sugerencias');
+      contenedor.innerHTML = '';
+      
+      if (resultados.length === 0) {
+        contenedor.style.display = 'none';
+        return;
+      }
+      
+      resultados.forEach(resultado => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item address-suggestion';
+        
+        const direccionCorta = formatearDireccionCorta(resultado);
+        const lat = parseFloat(resultado.lat);
+        const lng = parseFloat(resultado.lon);
+        const enZona = calcularDistancia(lat, lng, CENTRO_CDMX[0], CENTRO_CDMX[1]) <= 25;
+        
+        item.innerHTML = `
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <strong>${direccionCorta}</strong>
+              <br><small class="text-muted">${resultado.display_name}</small>
+            </div>
+            <div>
+              ${enZona 
+                ? '<span class="badge bg-success">En zona</span>' 
+                : '<span class="badge bg-warning">Fuera de zona</span>'
+              }
+            </div>
+          </div>
+        `;
+        
+        item.addEventListener('click', () => {
+          document.getElementById('buscarDireccion').value = direccionCorta;
+          mapa.setView([lat, lng], 16);
+          seleccionarUbicacion(lat, lng);
+          contenedor.style.display = 'none';
+        });
+        
+        contenedor.appendChild(item);
+      });
+      
+      contenedor.style.display = 'block';
+    }
+    
+    function formatearDireccionCorta(resultado) {
+      const addr = resultado.address || {};
+      const componentes = [];
+      
+      if (addr.house_number && addr.road) {
+        componentes.push(`${addr.road} ${addr.house_number}`);
+      } else if (addr.road) {
+        componentes.push(addr.road);
+      }
+      
+      if (addr.neighbourhood) {
+        componentes.push(addr.neighbourhood);
+      } else if (addr.suburb) {
+        componentes.push(addr.suburb);
+      }
+      
+      return componentes.slice(0, 2).join(', ');
+    }
+    
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+      inicializarMapa();
+      
+      // Búsqueda al escribir
+      let timeoutBusqueda = null;
+      document.getElementById('buscarDireccion').addEventListener('input', function() {
+        clearTimeout(timeoutBusqueda);
+        timeoutBusqueda = setTimeout(buscarDireccion, 500); // Buscar después de 500ms sin escribir
+      });
+      
+      // Búsqueda al hacer click en el botón
+      document.getElementById('buscarBtn').addEventListener('click', buscarDireccion);
+      
+      // Ocultar sugerencias al hacer click fuera
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#buscarDireccion') && !e.target.closest('#sugerencias')) {
+          document.getElementById('sugerencias').style.display = 'none';
+        }
+      });
+      
+      // Validación del formulario
+      document.getElementById('registroForm').addEventListener('submit', function(e) {
+        if (!coordenadasSeleccionadas) {
+          e.preventDefault();
+          alert('Por favor selecciona tu ubicación en el mapa antes de continuar.');
+          return false;
+        }
+        
+        // Verificar que esté en zona de cobertura
+        const distancia = calcularDistancia(
+          coordenadasSeleccionadas.lat, 
+          coordenadasSeleccionadas.lng, 
+          CENTRO_CDMX[0], 
+          CENTRO_CDMX[1]
+        );
+        
+        if (distancia > 25) {
+          e.preventDefault();
+          alert('Lo sentimos, tu ubicación está fuera de nuestra zona de cobertura actual.');
+          return false;
+        }
+      });
+    });
+    
+    // Detectar ubicación actual del usuario (opcional)
+    function detectarUbicacionActual() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            mapa.setView([lat, lng], 16);
+            seleccionarUbicacion(lat, lng);
+          },
+          function(error) {
+            console.log('Error obteniendo ubicación:', error);
+          }
+        );
+      }
+    }
+    
+    // Agregar botón para detectar ubicación actual
+    setTimeout(() => {
+      const botonUbicacion = L.control({position: 'topright'});
+      botonUbicacion.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+        div.style.backgroundColor = 'white';
+        div.style.width = '40px';
+        div.style.height = '40px';
+        div.style.cursor = 'pointer';
+        div.innerHTML = '<i class="fas fa-location-arrow" style="margin: 12px; color: #333;"></i>';
+        div.title = 'Detectar mi ubicación actual';
+        
+        div.onclick = function() {
+          detectarUbicacionActual();
+        };
+        
+        return div;
+      };
+      botonUbicacion.addTo(mapa);
+    }, 100);
+  </script>
 </body>
 </html>

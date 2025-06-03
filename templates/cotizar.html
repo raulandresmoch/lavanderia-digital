@@ -6,6 +6,73 @@
     <title>Cotizar Servicio - Lavandería Digital</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .prenda-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .prenda-card.selected {
+            border-color: #0d6efd;
+            background-color: #f8f9ff;
+        }
+        .direccion-icon {
+            width: 20px;
+            text-align: center;
+        }
+        #miniMapa {
+            height: 200px;
+            border-radius: 8px;
+        }
+        .step-indicator {
+            position: relative;
+            padding: 10px 0;
+        }
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #dee2e6;
+            z-index: 1;
+        }
+        .step-indicator .step {
+            position: relative;
+            z-index: 2;
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        .step-indicator .step.active {
+            border-color: #0d6efd;
+            background: #0d6efd;
+            color: white;
+        }
+        .step-indicator .step.completed {
+            border-color: #198754;
+            background: #198754;
+            color: white;
+        }
+        .cantidad-input:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        .btn-outline-primary:hover {
+            transform: translateY(-1px);
+        }
+        .direccion-preview {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #0d6efd;
+        }
+    </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -14,36 +81,75 @@
                 <i class="fas fa-tshirt me-2"></i>Lavandería Digital
             </a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{{ url_for('main.mis_pedidos') }}">Mis Pedidos</a>
-                <a class="nav-link" href="{{ url_for('main.logout') }}">Cerrar Sesión</a>
+                <a class="nav-link" href="{{ url_for('main.mis_direcciones') }}">
+                    <i class="fas fa-map-marker-alt me-1"></i>Mis Direcciones
+                </a>
+                <a class="nav-link" href="{{ url_for('main.mis_pedidos') }}">
+                    <i class="fas fa-box me-1"></i>Mis Pedidos
+                </a>
+                <a class="nav-link" href="{{ url_for('main.logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Cerrar Sesión
+                </a>
             </div>
         </div>
     </nav>
 
     <div class="container my-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card shadow">
-                    <div class="card-header bg-primary text-white">
-                        <h4 class="mb-0"><i class="fas fa-calculator me-2"></i>Cotizar Servicio</h4>
+        <!-- Indicador de pasos -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="row step-indicator">
+                    <div class="col-4 text-center">
+                        <div class="step active" id="step1">1</div>
+                        <small class="text-muted">Seleccionar Prendas</small>
                     </div>
-                    <div class="card-body">
+                    <div class="col-4 text-center">
+                        <div class="step" id="step2">2</div>
+                        <small class="text-muted">Revisar Cotización</small>
+                    </div>
+                    <div class="col-4 text-center">
+                        <div class="step" id="step3">3</div>
+                        <small class="text-muted">Confirmar Pedido</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow-lg border-0">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-calculator me-2"></i>
+                            <span id="tituloStep">Cotizar Servicio - Paso 1</span>
+                        </h4>
+                    </div>
+                    <div class="card-body p-4">
                         <!-- Paso 1: Selección de prendas -->
                         <div id="paso1">
-                            <h5 class="text-primary mb-3">Paso 1: Selecciona tus prendas</h5>
                             <form id="cotizacionForm">
-                                <div id="items-container">
-                                    {% for tipo in tipos_prenda %}
-                                    <div class="card mb-3">
-                                        <div class="card-body">
-                                            <div class="row align-items-center">
-                                                <div class="col-md-6">
-                                                    <h6 class="card-title">{{ tipo.nombre }}</h6>
-                                                    <p class="card-text text-muted small">{{ tipo.descripcion or 'Servicio de lavandería profesional' }}</p>
-                                                    <span class="badge bg-success">${{ "%.2f" | format(tipo.precio_por_kg) }} por kg</span>
-                                                    <span class="badge bg-info">{{ tipo.tiempo_lavado_horas }}h de proceso</span>
-                                                </div>
-                                                <div class="col-md-6">
+                                <!-- Sección de Prendas -->
+                                <div class="mb-4">
+                                    <h5 class="text-primary mb-3">
+                                        <i class="fas fa-tshirt me-2"></i>Selecciona tus prendas
+                                    </h5>
+                                    <div id="items-container" class="row">
+                                        {% for tipo in tipos_prenda %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card h-100 prenda-card" data-tipo-id="{{ tipo.id }}">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <h6 class="card-title mb-0">{{ tipo.nombre }}</h6>
+                                                        <span class="badge bg-success">${{ "%.2f" | format(tipo.precio_por_kg) }}/kg</span>
+                                                    </div>
+                                                    <p class="card-text text-muted small mb-3">
+                                                        {{ tipo.descripcion or 'Servicio de lavandería profesional' }}
+                                                    </p>
+                                                    <div class="mb-2">
+                                                        <span class="badge bg-info me-1">
+                                                            <i class="fas fa-clock me-1"></i>{{ tipo.tiempo_lavado_horas }}h
+                                                        </span>
+                                                    </div>
                                                     <div class="input-group">
                                                         <span class="input-group-text">Kg</span>
                                                         <input type="number" 
@@ -51,6 +157,7 @@
                                                                data-tipo-id="{{ tipo.id }}"
                                                                data-precio="{{ tipo.precio_por_kg }}"
                                                                data-tiempo="{{ tipo.tiempo_lavado_horas }}"
+                                                               data-nombre="{{ tipo.nombre }}"
                                                                step="0.5" 
                                                                min="0" 
                                                                max="50"
@@ -60,28 +167,144 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        {% endfor %}
                                     </div>
-                                    {% endfor %}
                                 </div>
 
-                                <div class="row mt-4">
-                                    <div class="col-md-6">
-                                        <label for="fechaRecoleccion" class="form-label">Fecha de Recolección</label>
+                                <!-- Sección de Dirección -->
+                                <div class="mb-4">
+                                    <h5 class="text-primary mb-3">
+                                        <i class="fas fa-map-marker-alt me-2"></i>Dirección de Recolección
+                                    </h5>
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <select class="form-select" id="direccionSelector" required>
+                                                <option value="">Selecciona una dirección...</option>
+                                                {% for direccion in direcciones %}
+                                                    <option value="{{ direccion.id }}" 
+                                                            data-direccion="{{ direccion.direccion }}"
+                                                            data-lat="{{ direccion.latitud }}"
+                                                            data-lng="{{ direccion.longitud }}"
+                                                            data-notas="{{ direccion.notas or '' }}"
+                                                            data-nombre="{{ direccion.nombre }}"
+                                                            {{ 'selected' if direccion.es_principal else '' }}>
+                                                        <i class="fas fa-{{ 'home' if direccion.nombre.lower() == 'casa' else 'building' if direccion.nombre.lower() == 'trabajo' else 'map-marker-alt' }} direccion-icon"></i>
+                                                        {{ direccion.nombre }} - {{ direccion.direccion[:50] }}{% if direccion.direccion|length > 50 %}...{% endif %}
+                                                    </option>
+                                                {% endfor %}
+                                                <option value="nueva">
+                                                    <i class="fas fa-plus direccion-icon"></i>Usar dirección diferente
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <a href="{{ url_for('main.mis_direcciones') }}" 
+                                               class="btn btn-outline-primary w-100">
+                                                <i class="fas fa-cog me-1"></i>Gestionar Direcciones
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Dirección personalizada -->
+                                <div id="direccionPersonalizada" class="mb-4" style="display: none;">
+                                    <div class="card border-warning">
+                                        <div class="card-body">
+                                            <h6 class="card-title text-warning">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>Dirección Personalizada
+                                            </h6>
+                                            <textarea class="form-control" 
+                                                     id="direccionCustom" 
+                                                     rows="3" 
+                                                     placeholder="Escribe la dirección completa incluyendo referencias..."></textarea>
+                                            <div class="form-text text-warning">
+                                                <strong>Nota:</strong> Las direcciones personalizadas no tienen validación GPS automática.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Información de dirección seleccionada -->
+                                <div id="infoDireccionSeleccionada" class="mb-4" style="display: none;">
+                                    <div class="card direccion-preview">
+                                        <div class="card-body">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-8">
+                                                    <h6 class="mb-1">
+                                                        <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                                        <span id="nombreDireccion"></span>
+                                                    </h6>
+                                                    <p class="mb-0 text-muted" id="direccionTexto"></p>
+                                                    <div id="notasDireccion" class="mt-2" style="display: none;">
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-sticky-note me-1"></i>
+                                                            <span id="notasTexto"></span>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 text-end">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-primary btn-sm me-2" 
+                                                            onclick="verUbicacionEnMapa()">
+                                                        <i class="fas fa-external-link-alt me-1"></i>Google Maps
+                                                    </button>
+                                                    <button type="button" 
+                                                            class="btn btn-primary btn-sm" 
+                                                            onclick="mostrarMiniMapa()">
+                                                        <i class="fas fa-map me-1"></i>Ver Mapa
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Mini mapa -->
+                                <div id="miniMapaContainer" class="mb-4" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="mb-0">Ubicación de Recolección</h6>
+                                                <button type="button" class="btn-close" onclick="ocultarMiniMapa()"></button>
+                                            </div>
+                                            <div id="miniMapa"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Fecha y notas -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="fechaRecoleccion" class="form-label">
+                                            <i class="fas fa-calendar-alt me-1"></i>Fecha de Recolección
+                                        </label>
                                         <input type="date" class="form-control" id="fechaRecoleccion" required>
-                                        <div class="form-text">Solo mañanas (9:00-12:00)</div>
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle me-1"></i>Servicio de mañana (9:00-12:00)
+                                        </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="direccion" class="form-label">Dirección de Recolección</label>
-                                        <textarea class="form-control" id="direccion" rows="2" placeholder="Calle, número, colonia, referencias..."></textarea>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="notas" class="form-label">
+                                            <i class="fas fa-sticky-note me-1"></i>Notas Especiales
+                                        </label>
+                                        <textarea class="form-control" id="notas" rows="2" 
+                                                  placeholder="Instrucciones especiales, manchas difíciles, etc."></textarea>
                                     </div>
                                 </div>
 
-                                <div class="mt-3">
-                                    <label for="notas" class="form-label">Notas Especiales (Opcional)</label>
-                                    <textarea class="form-control" id="notas" rows="2" placeholder="Instrucciones especiales, manchas difíciles, etc."></textarea>
+                                <!-- Resumen rápido -->
+                                <div id="resumenRapido" class="mb-4" style="display: none;">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="fas fa-eye me-2"></i>Resumen Rápido
+                                            </h6>
+                                            <div id="resumenTexto"></div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div class="d-grid mt-4">
+                                <div class="d-grid">
                                     <button type="button" class="btn btn-primary btn-lg" onclick="calcularCotizacion()">
                                         <i class="fas fa-calculator me-2"></i>Calcular Cotización
                                     </button>
@@ -91,14 +314,13 @@
 
                         <!-- Paso 2: Mostrar cotización -->
                         <div id="paso2" style="display: none;">
-                            <h5 class="text-success mb-3">Paso 2: Tu Cotización</h5>
                             <div id="resultado-cotizacion"></div>
                             
                             <div class="d-flex gap-2 mt-4">
-                                <button type="button" class="btn btn-secondary" onclick="volverPaso1()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="volverPaso1()">
                                     <i class="fas fa-arrow-left me-2"></i>Modificar
                                 </button>
-                                <button type="button" class="btn btn-success flex-fill" onclick="confirmarPedido()">
+                                <button type="button" class="btn btn-success flex-fill btn-lg" onclick="confirmarPedido()">
                                     <i class="fas fa-check me-2"></i>Confirmar Pedido
                                 </button>
                             </div>
@@ -110,207 +332,612 @@
     </div>
 
     <!-- Alert container -->
-    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
+    <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1060;"></div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mb-0">Calculando cotización...</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let cotizacionActual = null;
+let miniMapa = null;
 
-        // Configurar fechas mínimas
-        document.addEventListener('DOMContentLoaded', function() {
-            const fechaInput = document.getElementById('fechaRecoleccion');
-            const mañana = new Date();
-            mañana.setDate(mañana.getDate() + 1);
-            fechaInput.min = mañana.toISOString().split('T')[0];
+// Configurar fechas mínimas
+document.addEventListener('DOMContentLoaded', function() {
+    const fechaInput = document.getElementById('fechaRecoleccion');
+    const mañana = new Date();
+    mañana.setDate(mañana.getDate() + 1);
+    fechaInput.min = mañana.toISOString().split('T')[0];
+    
+    // Configurar event listeners
+    setupEventListeners();
+    
+    // Si hay una dirección principal seleccionada, mostrar info
+    const direccionSelector = document.getElementById('direccionSelector');
+    if (direccionSelector.value && direccionSelector.value !== 'nueva') {
+        mostrarInfoDireccion(direccionSelector.value);
+    }
+});
+
+function setupEventListeners() {
+    // Manejar cambio de dirección
+    document.getElementById('direccionSelector').addEventListener('change', function() {
+        const valor = this.value;
+        const direccionPersonalizada = document.getElementById('direccionPersonalizada');
+        const infoDireccion = document.getElementById('infoDireccionSeleccionada');
+        
+        if (valor === 'nueva') {
+            direccionPersonalizada.style.display = 'block';
+            infoDireccion.style.display = 'none';
+            ocultarMiniMapa();
+        } else if (valor === '') {
+            direccionPersonalizada.style.display = 'none';
+            infoDireccion.style.display = 'none';
+            ocultarMiniMapa();
+        } else {
+            direccionPersonalizada.style.display = 'none';
+            mostrarInfoDireccion(valor);
+        }
+        actualizarResumenRapido();
+    });
+
+    // Manejar cambios en cantidades
+    document.querySelectorAll('.cantidad-input').forEach(input => {
+        input.addEventListener('input', function() {
+            const card = this.closest('.prenda-card');
+            if (parseFloat(this.value) > 0) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+            actualizarResumenRapido();
         });
+    });
 
-        function mostrarAlerta(mensaje, tipo = 'info') {
-            const alertContainer = document.getElementById('alert-container');
-            const alertId = 'alert-' + Date.now();
-            
-            const alertHTML = `
-                <div id="${alertId}" class="alert alert-${tipo} alert-dismissible fade show" role="alert">
-                    ${mensaje}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-            
-            alertContainer.insertAdjacentHTML('beforeend', alertHTML);
-            
-            // Auto-dismiss después de 5 segundos
-            setTimeout(() => {
-                const alert = document.getElementById(alertId);
-                if (alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            }, 5000);
-        }
+    // Manejar cambio de fecha
+    document.getElementById('fechaRecoleccion').addEventListener('change', actualizarResumenRapido);
+}
 
-        function calcularCotizacion() {
-            const items = [];
-            const cantidadInputs = document.querySelectorAll('.cantidad-input');
-            
-            cantidadInputs.forEach(input => {
-                const cantidad = parseFloat(input.value) || 0;
-                if (cantidad > 0) {
-                    items.push({
-                        tipo_prenda_id: parseInt(input.dataset.tipoId),
-                        cantidad: cantidad,
-                        precio_unitario: parseFloat(input.dataset.precio)
-                    });
-                }
-            });
+function mostrarInfoDireccion(direccionId) {
+    const option = document.querySelector(`option[value="${direccionId}"]`);
+    if (!option) return;
+    
+    const direccion = option.dataset.direccion;
+    const notas = option.dataset.notas;
+    const nombre = option.dataset.nombre;
+    
+    document.getElementById('nombreDireccion').textContent = nombre;
+    document.getElementById('direccionTexto').textContent = direccion;
+    document.getElementById('infoDireccionSeleccionada').style.display = 'block';
+    
+    if (notas) {
+        document.getElementById('notasTexto').textContent = notas;
+        document.getElementById('notasDireccion').style.display = 'block';
+    } else {
+        document.getElementById('notasDireccion').style.display = 'none';
+    }
+}
 
-            if (items.length === 0) {
-                mostrarAlerta('Por favor selecciona al menos un tipo de prenda', 'warning');
-                return;
+function mostrarMiniMapa() {
+    const direccionSelector = document.getElementById('direccionSelector');
+    const option = direccionSelector.selectedOptions[0];
+    
+    if (!option || !option.dataset.lat || !option.dataset.lng) return;
+    
+    const lat = parseFloat(option.dataset.lat);
+    const lng = parseFloat(option.dataset.lng);
+    const nombre = option.dataset.nombre;
+    
+    document.getElementById('miniMapaContainer').style.display = 'block';
+    
+    // Inicializar mapa si no existe
+    if (!miniMapa) {
+        miniMapa = L.map('miniMapa').setView([lat, lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(miniMapa);
+    } else {
+        miniMapa.setView([lat, lng], 15);
+        miniMapa.eachLayer(layer => {
+            if (layer instanceof L.Marker) {
+                miniMapa.removeLayer(layer);
             }
+        });
+    }
+    
+    // Agregar marcador
+    L.marker([lat, lng])
+        .addTo(miniMapa)
+        .bindPopup(`<strong>${nombre}</strong><br>${option.dataset.direccion}`)
+        .openPopup();
+    
+    // Forzar actualización del mapa
+    setTimeout(() => {
+        miniMapa.invalidateSize();
+    }, 100);
+}
 
-            const fechaRecoleccion = document.getElementById('fechaRecoleccion').value;
-            if (!fechaRecoleccion) {
-                mostrarAlerta('Por favor selecciona una fecha de recolección', 'warning');
-                return;
-            }
+function ocultarMiniMapa() {
+    document.getElementById('miniMapaContainer').style.display = 'none';
+}
 
-            // Enviar cotización al servidor
-            fetch('/api/calcular-cotizacion', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    items: items,
-                    fecha_recoleccion: fechaRecoleccion
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    cotizacionActual = data;
-                    mostrarCotizacion(data);
-                } else {
-                    mostrarAlerta(data.error || 'Error al calcular cotización', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                mostrarAlerta('Error de conexión', 'danger');
+function verUbicacionEnMapa() {
+    const direccionSelector = document.getElementById('direccionSelector');
+    const option = direccionSelector.selectedOptions[0];
+    
+    if (option && option.dataset.lat && option.dataset.lng) {
+        const lat = parseFloat(option.dataset.lat);
+        const lng = parseFloat(option.dataset.lng);
+        const url = `https://www.google.com/maps?q=${lat},${lng}`;
+        window.open(url, '_blank');
+    }
+}
+
+function actualizarResumenRapido() {
+    const items = [];
+    const cantidadInputs = document.querySelectorAll('.cantidad-input');
+    
+    cantidadInputs.forEach(input => {
+        const cantidad = parseFloat(input.value) || 0;
+        if (cantidad > 0) {
+            items.push({
+                nombre: input.dataset.nombre,
+                cantidad: cantidad
             });
         }
+    });
 
-        function mostrarCotizacion(data) {
-            let detallesHTML = '<div class="table-responsive"><table class="table table-sm">';
-            detallesHTML += '<thead><tr><th>Tipo</th><th>Cantidad</th><th>Precio/kg</th><th>Subtotal</th></tr></thead><tbody>';
+    const direccionSelector = document.getElementById('direccionSelector');
+    const fechaRecoleccion = document.getElementById('fechaRecoleccion').value;
+    
+    if (items.length > 0 || direccionSelector.value || fechaRecoleccion) {
+        let resumen = '';
+        
+        if (items.length > 0) {
+            resumen += '<strong>Prendas:</strong> ';
+            resumen += items.map(item => `${item.nombre} (${item.cantidad}kg)`).join(', ');
+            resumen += '<br>';
+        }
+        
+        if (direccionSelector.value && direccionSelector.value !== 'nueva') {
+            const option = direccionSelector.selectedOptions[0];
+            resumen += `<strong>Recolección:</strong> ${option.dataset.nombre}<br>`;
+        }
+        
+        if (fechaRecoleccion) {
+            const fecha = new Date(fechaRecoleccion + 'T00:00:00');
+            resumen += `<strong>Fecha:</strong> ${fecha.toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}`;
+        }
+        
+        if (resumen) {
+            document.getElementById('resumenTexto').innerHTML = resumen;
+            document.getElementById('resumenRapido').style.display = 'block';
+        } else {
+            document.getElementById('resumenRapido').style.display = 'none';
+        }
+    } else {
+        document.getElementById('resumenRapido').style.display = 'none';
+    }
+}
+
+function mostrarAlerta(mensaje, tipo = 'info') {
+    const alertContainer = document.getElementById('alert-container');
+    const alertId = 'alert-' + Date.now();
+    
+    const alertHTML = `
+        <div id="${alertId}" class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+            ${mensaje}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    alertContainer.insertAdjacentHTML('beforeend', alertHTML);
+    
+    setTimeout(() => {
+        const alert = document.getElementById(alertId);
+        if (alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    }, 5000);
+}
+
+function ocultarModalLoading() {
+    try {
+        // Método 1: Bootstrap Modal
+        const loadingModalElement = document.getElementById('loadingModal');
+        if (loadingModalElement) {
+            const modalInstance = bootstrap.Modal.getInstance(loadingModalElement);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
+        
+        // Método 2: Forzar ocultación manual
+        setTimeout(() => {
+            const modal = document.getElementById('loadingModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.removeAttribute('aria-modal');
+                modal.removeAttribute('role');
+            }
             
-            data.detalles.forEach(item => {
-                detallesHTML += `
-                    <tr>
-                        <td>${item.tipo}</td>
-                        <td>${item.cantidad} kg</td>
-                        <td>$${item.precio_unitario.toFixed(2)}</td>
-                        <td>$${item.subtotal.toFixed(2)}</td>
-                    </tr>
-                `;
+            // Remover backdrop si existe
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+            
+            // Remover clase del body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }, 100);
+        
+    } catch (error) {
+        console.log('Error ocultando modal:', error);
+        // Fallback manual
+        const modal = document.getElementById('loadingModal');
+        if (modal) modal.style.display = 'none';
+    }
+}
+
+function calcularCotizacion() {
+    const items = [];
+    const cantidadInputs = document.querySelectorAll('.cantidad-input');
+    
+    cantidadInputs.forEach(input => {
+        const cantidad = parseFloat(input.value) || 0;
+        if (cantidad > 0) {
+            items.push({
+                tipo_prenda_id: parseInt(input.dataset.tipoId),
+                cantidad: cantidad,
+                precio_unitario: parseFloat(input.dataset.precio)
             });
-            
-            detallesHTML += '</tbody></table></div>';
+        }
+    });
 
-            const resultadoHTML = `
-                <div class="card border-success">
-                    <div class="card-body">
-                        ${detallesHTML}
-                        <hr>
-                        <div class="row">
-                            <div class="col-sm-6">
-                                <strong>Fecha de Recolección:</strong><br>
-                                ${new Date(document.getElementById('fechaRecoleccion').value + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
-                                <br><small class="text-muted">Horario: Mañana (9:00-12:00)</small>
-                            </div>
-                            <div class="col-sm-6">
-                                <strong>Fecha de Entrega:</strong><br>
-                                ${new Date(data.fecha_entrega + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
-                                <br><small class="text-muted">Horario: Tarde (14:00-18:00)</small>
+    if (items.length === 0) {
+        mostrarAlerta('Por favor selecciona al menos un tipo de prenda', 'warning');
+        return;
+    }
+
+    const fechaRecoleccion = document.getElementById('fechaRecoleccion').value;
+    if (!fechaRecoleccion) {
+        mostrarAlerta('Por favor selecciona una fecha de recolección', 'warning');
+        return;
+    }
+
+    const direccionSelector = document.getElementById('direccionSelector');
+    if (!direccionSelector.value) {
+        mostrarAlerta('Por favor selecciona una dirección de recolección', 'warning');
+        return;
+    }
+
+    if (direccionSelector.value === 'nueva') {
+        const direccionCustom = document.getElementById('direccionCustom').value.trim();
+        if (!direccionCustom) {
+            mostrarAlerta('Por favor ingresa la dirección personalizada', 'warning');
+            return;
+        }
+    }
+
+    // Mostrar modal de loading
+    const loadingModalElement = document.getElementById('loadingModal');
+    let loadingModal = null;
+    
+    if (loadingModalElement) {
+        loadingModal = new bootstrap.Modal(loadingModalElement);
+        loadingModal.show();
+    }
+
+    // Preparar datos para envío
+    const requestData = {
+        items: items,
+        fecha_recoleccion: fechaRecoleccion
+    };
+
+    console.log('🚀 Enviando datos de cotización:', requestData);
+
+    // Enviar cotización al servidor
+    fetch('/api/calcular-cotizacion', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+            return response.text().then(text => {
+                throw new Error(`HTTP ${response.status}: ${text}`);
+            });
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('✅ Response data:', data);
+        
+        // IMPORTANTE: Ocultar modal ANTES de procesar datos
+        ocultarModalLoading();
+        
+        if (data.success) {
+            cotizacionActual = data;
+            mostrarCotizacion(data);
+        } else {
+            mostrarAlerta(data.error || 'Error al calcular cotización', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error completo:', error);
+        
+        // IMPORTANTE: Ocultar modal en caso de error también
+        ocultarModalLoading();
+        
+        // Mostrar error más específico
+        if (error.message.includes('Failed to fetch')) {
+            mostrarAlerta('❌ Error de conexión. Verifica tu internet y que el servidor esté funcionando.', 'danger');
+        } else if (error.message.includes('404')) {
+            mostrarAlerta('❌ Ruta no encontrada. La API /api/calcular-cotizacion no existe.', 'danger');
+        } else if (error.message.includes('500')) {
+            mostrarAlerta('❌ Error del servidor. Revisa los logs del backend Flask.', 'danger');
+        } else {
+            mostrarAlerta(`❌ Error: ${error.message}`, 'danger');
+        }
+    });
+}
+
+function mostrarCotizacion(data) {
+    // Asegurar que el modal esté oculto
+    ocultarModalLoading();
+    
+    // Actualizar indicadores de pasos
+    document.getElementById('step1').classList.remove('active');
+    document.getElementById('step1').classList.add('completed');
+    document.getElementById('step2').classList.add('active');
+    document.getElementById('tituloStep').textContent = 'Cotizar Servicio - Paso 2';
+
+    let detallesHTML = '<div class="table-responsive"><table class="table table-hover">';
+    detallesHTML += '<thead class="table-primary"><tr><th>Tipo de Prenda</th><th>Cantidad</th><th>Precio/kg</th><th>Subtotal</th></tr></thead><tbody>';
+    
+    data.detalles.forEach(item => {
+        detallesHTML += `
+            <tr>
+                <td><strong>${item.tipo}</strong></td>
+                <td>${item.cantidad} kg</td>
+                <td>$${item.precio_unitario.toFixed(2)}</td>
+                <td><strong>$${item.subtotal.toFixed(2)}</strong></td>
+            </tr>
+        `;
+    });
+    
+    detallesHTML += '</tbody></table></div>';
+
+    const direccionSelector = document.getElementById('direccionSelector');
+    let direccionInfo = '';
+    if (direccionSelector.value === 'nueva') {
+        direccionInfo = document.getElementById('direccionCustom').value;
+    } else {
+        const option = direccionSelector.selectedOptions[0];
+        direccionInfo = `${option.dataset.nombre} - ${option.dataset.direccion}`;
+    }
+
+    const resultadoHTML = `
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-check-circle me-2"></i>Tu Cotización
+                </h5>
+            </div>
+            <div class="card-body">
+                ${detallesHTML}
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-truck me-2 text-primary"></i>Recolección
+                                </h6>
+                                <p class="mb-1"><strong>Dirección:</strong></p>
+                                <p class="mb-2">${direccionInfo}</p>
+                                <p class="mb-1"><strong>Fecha:</strong></p>
+                                <p class="mb-0">${new Date(document.getElementById('fechaRecoleccion').value + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                                <small class="text-muted">Horario: 9:00 AM - 12:00 PM</small>
                             </div>
                         </div>
-                        <hr>
-                        <div class="text-center">
-                            <h4 class="text-success mb-0">Total: $${data.total.toFixed(2)}</h4>
-                            <small class="text-muted">Servicio en ${data.dias_servicio} día${data.dias_servicio > 1 ? 's' : ''}</small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-home me-2 text-success"></i>Entrega
+                                </h6>
+                                <p class="mb-1"><strong>Dirección:</strong></p>
+                                <p class="mb-2">${direccionInfo}</p>
+                                <p class="mb-1"><strong>Fecha:</strong></p>
+                                <p class="mb-0">${new Date(data.fecha_entrega + 'T00:00:00').toLocaleDateString('es-MX', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                                <small class="text-muted">Horario: 2:00 PM - 6:00 PM</small>
+                            </div>
                         </div>
                     </div>
                 </div>
-            `;
+                
+                <hr class="my-4">
+                
+                <div class="text-center">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="text-success mb-0">
+                                <i class="fas fa-dollar-sign me-2"></i>Total: $${data.total.toFixed(2)}
+                            </h4>
+                            <small class="text-muted">
+                                Servicio completo en ${data.dias_servicio} día${data.dias_servicio > 1 ? 's' : ''}
+                            </small>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="badge bg-primary fs-6 p-2">
+                                <i class="fas fa-weight me-1"></i>
+                                ${data.detalles.reduce((sum, item) => sum + item.cantidad, 0)} kg total
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${document.getElementById('notas').value ? `
+                <div class="mt-3">
+                    <div class="card bg-warning bg-opacity-10 border-warning">
+                        <div class="card-body py-2">
+                            <h6 class="card-title text-warning mb-1">
+                                <i class="fas fa-sticky-note me-2"></i>Notas Especiales
+                            </h6>
+                            <p class="mb-0">${document.getElementById('notas').value}</p>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
 
-            document.getElementById('resultado-cotizacion').innerHTML = resultadoHTML;
-            document.getElementById('paso1').style.display = 'none';
-            document.getElementById('paso2').style.display = 'block';
+    document.getElementById('resultado-cotizacion').innerHTML = resultadoHTML;
+    document.getElementById('paso1').style.display = 'none';
+    document.getElementById('paso2').style.display = 'block';
+}
+
+function volverPaso1() {
+    // Actualizar indicadores de pasos
+    document.getElementById('step1').classList.add('active');
+    document.getElementById('step1').classList.remove('completed');
+    document.getElementById('step2').classList.remove('active');
+    document.getElementById('tituloStep').textContent = 'Cotizar Servicio - Paso 1';
+    
+    document.getElementById('paso1').style.display = 'block';
+    document.getElementById('paso2').style.display = 'none';
+}
+
+function confirmarPedido() {
+    if (!cotizacionActual) {
+        mostrarAlerta('Error: No hay cotización activa', 'danger');
+        return;
+    }
+
+    // Actualizar indicadores de pasos
+    document.getElementById('step2').classList.remove('active');
+    document.getElementById('step2').classList.add('completed');
+    document.getElementById('step3').classList.add('active');
+    document.getElementById('tituloStep').textContent = 'Confirmar Pedido - Paso 3';
+
+    const direccionSelector = document.getElementById('direccionSelector');
+    const direccionId = direccionSelector.value;
+    
+    let direccionTexto = '';
+    let latitud = null;
+    let longitud = null;
+    
+    if (direccionId === 'nueva') {
+        direccionTexto = document.getElementById('direccionCustom').value.trim();
+        if (!direccionTexto) {
+            mostrarAlerta('Por favor ingresa la dirección personalizada', 'warning');
+            return;
         }
+    } else if (direccionId === '') {
+        mostrarAlerta('Por favor selecciona una dirección de recolección', 'warning');
+        return;
+    } else {
+        const option = direccionSelector.selectedOptions[0];
+        direccionTexto = option.dataset.direccion;
+        latitud = parseFloat(option.dataset.lat);
+        longitud = parseFloat(option.dataset.lng);
+    }
 
-        function volverPaso1() {
-            document.getElementById('paso1').style.display = 'block';
-            document.getElementById('paso2').style.display = 'none';
-        }
-
-        function confirmarPedido() {
-            if (!cotizacionActual) {
-                mostrarAlerta('Error: No hay cotización activa', 'danger');
-                return;
-            }
-
-            const direccion = document.getElementById('direccion').value.trim();
-            if (!direccion) {
-                mostrarAlerta('Por favor ingresa la dirección de recolección', 'warning');
-                return;
-            }
-
-            const items = [];
-            const cantidadInputs = document.querySelectorAll('.cantidad-input');
-            cantidadInputs.forEach(input => {
-                const cantidad = parseFloat(input.value) || 0;
-                if (cantidad > 0) {
-                    items.push({
-                        tipo_prenda_id: parseInt(input.dataset.tipoId),
-                        cantidad: cantidad,
-                        precio_unitario: parseFloat(input.dataset.precio),
-                        subtotal: cantidad * parseFloat(input.dataset.precio)
-                    });
-                }
+    const items = [];
+    const cantidadInputs = document.querySelectorAll('.cantidad-input');
+    cantidadInputs.forEach(input => {
+        const cantidad = parseFloat(input.value) || 0;
+        if (cantidad > 0) {
+            items.push({
+                tipo_prenda_id: parseInt(input.dataset.tipoId),
+                cantidad: cantidad,
+                precio_unitario: parseFloat(input.dataset.precio),
+                subtotal: cantidad * parseFloat(input.dataset.precio)
             });
-
-            const pedidoData = {
-                items: items,
-                fecha_recoleccion: document.getElementById('fechaRecoleccion').value,
-                fecha_entrega: cotizacionActual.fecha_entrega,
-                precio_total: cotizacionActual.total,
-                direccion: direccion,
-                notas: document.getElementById('notas').value,
-                peso_estimado: items.reduce((sum, item) => sum + item.cantidad, 0)
-            };
-
-            fetch('/confirmar-pedido', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(pedidoData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    mostrarAlerta('¡Pedido confirmado exitosamente!', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/mis-pedidos';
-                    }, 2000);
-                } else {
-                    mostrarAlerta(data.error || 'Error al confirmar pedido', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                mostrarAlerta('Error de conexión', 'danger');
-            });
         }
+    });
+
+    const pedidoData = {
+        items: items,
+        fecha_recoleccion: document.getElementById('fechaRecoleccion').value,
+        fecha_entrega: cotizacionActual.fecha_entrega,
+        precio_total: cotizacionActual.total,
+        direccion_id: direccionId !== 'nueva' ? direccionId : null,
+        direccion_personalizada: direccionId === 'nueva' ? direccionTexto : null,
+        direccion: direccionTexto,
+        latitud: latitud,
+        longitud: longitud,
+        notas: document.getElementById('notas').value,
+        peso_estimado: items.reduce((sum, item) => sum + item.cantidad, 0)
+    };
+
+    // Mostrar loading
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+
+    fetch('/confirmar-pedido', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pedidoData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        loadingModal.hide();
+        if (data.success) {
+            mostrarAlerta('¡Pedido confirmado exitosamente! Redirigiendo...', 'success');
+            setTimeout(() => {
+                window.location.href = '/mis-pedidos';
+            }, 2000);
+        } else {
+            // Revertir indicadores en caso de error
+            document.getElementById('step2').classList.add('active');
+            document.getElementById('step2').classList.remove('completed');
+            document.getElementById('step3').classList.remove('active');
+            document.getElementById('tituloStep').textContent = 'Cotizar Servicio - Paso 2';
+            
+            mostrarAlerta(data.error || 'Error al confirmar pedido', 'danger');
+        }
+    })
+    .catch(error => {
+        loadingModal.hide();
+        
+        // Revertir indicadores en caso de error
+        document.getElementById('step2').classList.add('active');
+        document.getElementById('step2').classList.remove('completed');
+        document.getElementById('step3').classList.remove('active');
+        document.getElementById('tituloStep').textContent = 'Cotizar Servicio - Paso 2';
+        
+        console.error('Error:', error);
+        mostrarAlerta('Error de conexión', 'danger');
+    });
+}
     </script>
 </body>
 </html>

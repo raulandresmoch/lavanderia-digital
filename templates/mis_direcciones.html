@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Direcciones - Lavandería Digital</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .direccion-card {
+            transition: all 0.3s ease;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid transparent;
+        }
+        
+        .direccion-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-color: #0d6efd;
+        }
+        
+        .direccion-card.principal {
+            border-color: #ffc107;
+            position: relative;
+        }
+        
+        .direccion-card.principal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+            z-index: 1;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .direccion-principal .card-header {
+            background: linear-gradient(135deg, #fff3cd 0%, #fef7dc 100%);
+        }
+        
+        .direccion-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-en-zona {
+            background: #d1edff;
+            color: #0c5460;
+        }
+        
+        .status-fuera-zona {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .direccion-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-right: 12px;
+        }
+        
+        .icon-casa {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .icon-trabajo {
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            color: white;
+        }
+        
+        .icon-otro {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        
+        .empty-state {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .empty-icon {
+            font-size: 80px;
+            opacity: 0.3;
+            margin-bottom: 20px;
+        }
+        
+        .stats-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            margin: 5px;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-action {
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .search-input {
+            border-radius: 25px;
+            padding-left: 45px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        
+        .filter-tabs {
+            margin-bottom: 20px;
+        }
+        
+        .filter-tab {
+            border: none;
+            background: #f8f9fa;
+            color: #6c757d;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-right: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-tab.active {
+            background: #0d6efd;
+            color: white;
+        }
+        
+        .direccion-meta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #f8f9fa;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .quick-actions {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1040;
+        }
+        
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        #miniMapa {
+            height: 400px;
+            border-radius: 10px;
+        }
+        
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        @media (max-width: 768px) {
+            .direccion-card {
+                margin-bottom: 15px;
+            }
+            
+            .quick-actions {
+                bottom: 80px;
+            }
+            
+            .action-buttons {
+                justify-content: center;
+            }
+        }
+        
+        .coordinate-copy {
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        
+        .coordinate-copy:hover {
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.home') }}">
+                <i class="fas fa-tshirt me-2"></i>Lavandería Digital
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.cotizar') }}">
+                    <i class="fas fa-calculator me-1"></i>Cotizar
+                </a>
+                <a class="nav-link" href="{{ url_for('main.mis_pedidos') }}">
+                    <i class="fas fa-box me-1"></i>Mis Pedidos
+                </a>
+                <a class="nav-link active" href="{{ url_for('main.mis_direcciones') }}">
+                    <i class="fas fa-map-marker-alt me-1"></i>Mis Direcciones
+                </a>
+                <a class="nav-link" href="{{ url_for('main.logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Cerrar Sesión
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <!-- Header con estadísticas -->
+        {% if direcciones %}
+        <div class="stats-container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-0">
+                        <i class="fas fa-map-marker-alt me-2 text-primary"></i>Mis Direcciones
+                    </h2>
+                    <p class="text-muted mb-0">Gestiona tus ubicaciones de recolección y entrega</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ direcciones|length }}</div>
+                                <small class="text-muted">Total</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ direcciones|selectattr('en_zona_cobertura')|list|length }}</div>
+                                <small class="text-muted">En zona</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-map-marker-alt me-2 text-primary"></i>Mis Direcciones</h2>
+        </div>
+        {% endif %}
+
+        <!-- Mensajes Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if direcciones %}
+            <!-- Búsqueda y filtros -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="search-container">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" 
+                               class="form-control search-input" 
+                               id="searchInput" 
+                               placeholder="Buscar por nombre, dirección o referencias...">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all">
+                            <i class="fas fa-list me-1"></i>Todas
+                        </button>
+                        <button class="filter-tab" data-filter="principal">
+                            <i class="fas fa-star me-1"></i>Principal
+                        </button>
+                        <button class="filter-tab" data-filter="zona">
+                            <i class="fas fa-check-circle me-1"></i>En zona
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid de direcciones -->
+            <div class="row g-4" id="direccionesContainer">
+                {% for direccion in direcciones %}
+                <div class="col-lg-6 direccion-item fade-in" 
+                     data-nombre="{{ direccion.nombre.lower() }}"
+                     data-direccion="{{ direccion.direccion.lower() }}"
+                     data-notas="{{ (direccion.notas or '').lower() }}"
+                     data-principal="{{ direccion.es_principal|lower }}"
+                     data-zona="{{ direccion.en_zona_cobertura|lower }}">
+                    <div class="card direccion-card h-100 {{ 'principal direccion-principal' if direccion.es_principal else '' }}">
+                        <div class="card-header">
+                            <div class="d-flex align-items-center">
+                                <div class="direccion-icon {{ 'icon-casa' if direccion.nombre.lower() == 'casa' else 'icon-trabajo' if direccion.nombre.lower() == 'trabajo' else 'icon-otro' }}">
+                                    <i class="fas fa-{{ 'home' if direccion.nombre.lower() == 'casa' else 'building' if direccion.nombre.lower() == 'trabajo' else 'map-marker-alt' }}"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-0">{{ direccion.nombre }}</h5>
+                                    <div class="d-flex gap-2 mt-1">
+                                        {% if direccion.es_principal %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-star me-1"></i>Principal
+                                            </span>
+                                        {% endif %}
+                                        <span class="direccion-status {{ 'status-en-zona' if direccion.en_zona_cobertura else 'status-fuera-zona' }}">
+                                            <i class="fas fa-{{ 'check-circle' if direccion.en_zona_cobertura else 'exclamation-triangle' }} me-1"></i>
+                                            {{ 'En zona' if direccion.en_zona_cobertura else 'Fuera de zona' }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                            type="button" 
+                                            data-bs-toggle="dropdown"
+                                            aria-expanded="false">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('main.editar_direccion', direccion_id=direccion.id) }}">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item" onclick="verEnMapa({{ direccion.latitud }}, {{ direccion.longitud }}, '{{ direccion.nombre }}', '{{ direccion.direccion }}')">
+                                                <i class="fas fa-map me-2 text-info"></i>Ver en mapa
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item" onclick="abrirEnGoogleMaps({{ direccion.latitud }}, {{ direccion.longitud }})">
+                                                <i class="fas fa-external-link-alt me-2 text-success"></i>Google Maps
+                                            </button>
+                                        </li>
+                                        {% if not direccion.es_principal %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button class="dropdown-item text-warning" onclick="marcarComoPrincipal({{ direccion.id }})">
+                                                <i class="fas fa-star me-2"></i>Marcar como principal
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item text-danger" onclick="eliminarDireccion({{ direccion.id }}, '{{ direccion.nombre }}')">
+                                                <i class="fas fa-trash me-2"></i>Eliminar
+                                            </button>
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="d-flex align-items-start">
+                                    <i class="fas fa-map-marker-alt text-muted me-2 mt-1"></i>
+                                    <span class="flex-grow-1">{{ direccion.direccion }}</span>
+                                </div>
+                            </div>
+                            
+                            {% if direccion.notas %}
+                            <div class="mb-3">
+                                <div class="d-flex align-items-start">
+                                    <i class="fas fa-sticky-note text-muted me-2 mt-1"></i>
+                                    <small class="text-muted flex-grow-1">{{ direccion.notas }}</small>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="direccion-meta">
+                                <div class="meta-item">
+                                    <i class="fas fa-{{ 'check-circle text-success' if direccion.verificada else 'times-circle text-danger' }}"></i>
+                                    <span>{{ 'Verificada' if direccion.verificada else 'Sin verificar' }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <i class="fas fa-calendar text-muted"></i>
+                                    <span>{{ direccion.creada.strftime('%d/%m/%Y') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted coordinate-copy" 
+                                       onclick="copiarCoordenadas({{ direccion.latitud }}, {{ direccion.longitud }})"
+                                       title="Haz clic para copiar coordenadas">
+                                    <i class="fas fa-copy me-1"></i>
+                                    {{ "%.4f" | format(direccion.latitud) }}, {{ "%.4f" | format(direccion.longitud) }}
+                                </small>
+                                <div class="action-buttons">
+                                    {% if direccion.en_zona_cobertura %}
+                                    <a href="{{ url_for('main.cotizar') }}?direccion={{ direccion.id }}" 
+                                       class="btn btn-primary btn-action">
+                                        <i class="fas fa-calculator me-1"></i>Cotizar
+                                    </a>
+                                    {% endif %}
+                                    <button class="btn btn-outline-info btn-action" 
+                                            onclick="verEnMapa({{ direccion.latitud }}, {{ direccion.longitud }}, '{{ direccion.nombre }}', '{{ direccion.direccion }}')">
+                                        <i class="fas fa-eye me-1"></i>Ver
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Estado de búsqueda vacía -->
+            <div id="noResults" class="text-center py-5" style="display: none;">
+                <div class="mb-4">
+                    <i class="fas fa-search fa-4x text-muted opacity-50"></i>
+                </div>
+                <h4 class="text-muted">No se encontraron direcciones</h4>
+                <p class="text-muted">Intenta con otros términos de búsqueda</p>
+                <button class="btn btn-outline-primary" onclick="limpiarBusqueda()">
+                    <i class="fas fa-times me-2"></i>Limpiar búsqueda
+                </button>
+            </div>
+
+        {% else %}
+            <!-- Estado vacío -->
+            <div class="empty-state">
+                <div class="text-center">
+                    <div class="empty-icon">
+                        <i class="fas fa-map-marker-alt text-muted"></i>
+                    </div>
+                    <h3 class="text-muted mb-3">No tienes direcciones guardadas</h3>
+                    <p class="text-muted mb-4">
+                        Agrega tu primera dirección para comenzar a usar nuestro servicio de lavandería.
+                        <br>Podrás gestionar múltiples ubicaciones para recolección y entrega.
+                    </p>
+                    <a href="{{ url_for('main.agregar_direccion') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus me-2"></i>Agregar Primera Dirección
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Botón flotante de acción rápida -->
+    {% if direcciones %}
+    <div class="quick-actions">
+        <a href="{{ url_for('main.agregar_direccion') }}" class="btn btn-primary fab" title="Agregar nueva dirección">
+            <i class="fas fa-plus"></i>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Modal para ver en mapa -->
+    <div class="modal fade" id="mapaModal" tabindex="-1" aria-labelledby="mapaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="mapaModalLabel">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        <span id="modalTitulo"></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="miniMapa"></div>
+                </div>
+                <div class="modal-footer">
+                    <div class="d-flex justify-content-between w-100 align-items-center">
+                        <small class="text-muted" id="modalDireccion"></small>
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-1"></i>Cerrar
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm" id="abrirGoogleMaps">
+                                <i class="fas fa-external-link-alt me-1"></i>Google Maps
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación de eliminación -->
+    <div class="modal fade" id="eliminarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        Confirmar eliminación
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que quieres eliminar la dirección <strong id="nombreEliminar"></strong>?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Esta acción no se puede deshacer.</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-danger" id="confirmarEliminar">
+                        <i class="fas fa-trash me-2"></i>Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        let miniMapa = null;
+        let coordenadasActuales = null;
+        const mapaModal = new bootstrap.Modal(document.getElementById('mapaModal'));
+        const eliminarModal = new bootstrap.Modal(document.getElementById('eliminarModal'));
+        let direccionAEliminar = null;
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            configurarBusqueda();
+            configurarFiltros();
+            configurarModalEventos();
+        });
+
+        function configurarBusqueda() {
+            const searchInput = document.getElementById('searchInput');
+            if (!searchInput) return;
+
+            let timeoutId;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    filtrarDirecciones();
+                }, 300);
+            });
+        }
+
+        function configurarFiltros() {
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Actualizar tabs activos
+                    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Filtrar
+                    filtrarDirecciones();
+                });
+            });
+        }
+
+        function configurarModalEventos() {
+            // Limpiar mapa al cerrar modal
+            document.getElementById('mapaModal').addEventListener('hidden.bs.modal', function() {
+                if (miniMapa) {
+                    miniMapa.remove();
+                    miniMapa = null;
+                }
+            });
+        }
+
+        function filtrarDirecciones() {
+            const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+            const activeFilter = document.querySelector('.filter-tab.active')?.dataset.filter || 'all';
+            const direcciones = document.querySelectorAll('.direccion-item');
+            let visibleCount = 0;
+
+            direcciones.forEach(direccion => {
+                const nombre = direccion.dataset.nombre;
+                const direccionText = direccion.dataset.direccion;
+                const notas = direccion.dataset.notas;
+                const esPrincipal = direccion.dataset.principal === 'true';
+                const enZona = direccion.dataset.zona === 'true';
+
+                // Filtro de búsqueda
+                const matchesSearch = searchTerm === '' || 
+                    nombre.includes(searchTerm) || 
+                    direccionText.includes(searchTerm) || 
+                    notas.includes(searchTerm);
+
+                // Filtro por categoría
+                let matchesFilter = true;
+                switch(activeFilter) {
+                    case 'principal':
+                        matchesFilter = esPrincipal;
+                        break;
+                    case 'zona':
+                        matchesFilter = enZona;
+                        break;
+                    case 'all':
+                    default:
+                        matchesFilter = true;
+                        break;
+                }
+
+                const shouldShow = matchesSearch && matchesFilter;
+                direccion.style.display = shouldShow ? 'block' : 'none';
+                
+                if (shouldShow) {
+                    visibleCount++;
+                    direccion.classList.add('fade-in');
+                }
+            });
+
+            // Mostrar/ocultar mensaje de no resultados
+            const noResults = document.getElementById('noResults');
+            if (noResults) {
+                noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+            }
+        }
+
+        function limpiarBusqueda() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            
+            // Resetear filtro a "Todas"
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.filter-tab[data-filter="all"]').classList.add('active');
+            
+            filtrarDirecciones();
+        }
+
+        function mostrarToast(mensaje, tipo = 'info') {
+            const toastContainer = document.querySelector('.toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const iconos = {
+                success: 'check-circle',
+                danger: 'exclamation-triangle',
+                warning: 'exclamation-triangle',
+                info: 'info-circle'
+            };
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header text-${tipo}">
+                        <i class="fas fa-${iconos[tipo]} me-2"></i>
+                        <strong class="me-auto">Lavandería Digital</strong>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${mensaje}
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: 5000
+            });
+            toast.show();
+            
+            // Remover del DOM al ocultarse
+            toastElement.addEventListener('hidden.bs.toast', function () {
+                toastElement.remove();
+            });
+        }
+
+        function verEnMapa(lat, lng, nombre, direccion) {
+            coordenadasActuales = {lat, lng};
+            
+            document.getElementById('modalTitulo').textContent = nombre;
+            document.getElementById('modalDireccion').textContent = direccion;
+            
+            // Configurar botón de Google Maps
+            document.getElementById('abrirGoogleMaps').onclick = () => abrirEnGoogleMaps(lat, lng);
+            
+            // Mostrar modal
+            mapaModal.show();
+            
+            // Inicializar mapa cuando se muestre el modal
+            document.getElementById('mapaModal').addEventListener('shown.bs.modal', function() {
+                if (miniMapa) {
+                    miniMapa.remove();
+                }
+                
+                miniMapa = L.map('miniMapa').setView([lat, lng], 16);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(miniMapa);
+                
+                // Zona de cobertura
+                const CENTRO_CDMX = [19.4326, -99.1332];
+                L.circle(CENTRO_CDMX, {
+                    color: '#007bff',
+                    fillColor: '#007bff',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    radius: 25000
+                }).addTo(miniMapa);
+                
+                // Marcador de la dirección
+                const marker = L.marker([lat, lng]).addTo(miniMapa);
+                marker.bindPopup(`
+                    <div class="text-center">
+                        <h6><i class="fas fa-map-marker-alt text-danger me-2"></i>${nombre}</h6>
+                        <p class="mb-0 small">${direccion}</p>
+                    </div>
+                `).openPopup();
+                
+                // Forzar recalculo del tamaño
+                setTimeout(() => {
+                    miniMapa.invalidateSize();
+                }, 100);
+            }, { once: true });
+        }
+
+        function abrirEnGoogleMaps(lat, lng) {
+            const url = `https://www.google.com/maps?q=${lat},${lng}`;
+            window.open(url, '_blank');
+        }
+
+        function copiarCoordenadas(lat, lng) {
+            const coordenadas = `${lat}, ${lng}`;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(coordenadas).then(() => {
+                    mostrarToast('Coordenadas copiadas al portapapeles', 'success');
+                }).catch(() => {
+                    mostrarToast('Error al copiar coordenadas', 'danger');
+                });
+            } else {
+                // Fallback para navegadores antiguos
+                const textArea = document.createElement('textarea');
+                textArea.value = coordenadas;
+                document.body.appendChild(textArea);
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    mostrarToast('Coordenadas copiadas al portapapeles', 'success');
+                } catch (err) {
+                    mostrarToast('Error al copiar coordenadas', 'danger');
+                }
+                
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function marcarComoPrincipal(direccionId) {
+            if (!confirm('¿Estás seguro de que quieres marcar esta dirección como principal?')) {
+                return;
+            }
+
+            // Mostrar loading
+            mostrarToast('Actualizando dirección principal...', 'info');
+
+            fetch(`/marcar-principal/${direccionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarToast(data.mensaje, 'success');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    mostrarToast(data.error || 'Error al actualizar dirección principal', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarToast('Error de conexión', 'danger');
+            });
+        }
+
+        function eliminarDireccion(direccionId, nombreDireccion) {
+            direccionAEliminar = direccionId;
+            document.getElementById('nombreEliminar').textContent = nombreDireccion;
+            eliminarModal.show();
+        }
+
+        // Configurar confirmación de eliminación
+        document.getElementById('confirmarEliminar').addEventListener('click', function() {
+            if (!direccionAEliminar) return;
+
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            // Mostrar loading en botón
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Eliminando...';
+            btn.disabled = true;
+
+            fetch(`/eliminar-direccion/${direccionAEliminar}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    eliminarModal.hide();
+                    mostrarToast(data.mensaje, 'success');
+                    
+                    // Remover la tarjeta con animación
+                    const direccionCard = document.querySelector(`[data-direccion-id="${direccionAEliminar}"]`)?.closest('.direccion-item');
+                    if (direccionCard) {
+                        direccionCard.style.transition = 'all 0.5s ease';
+                        direccionCard.style.transform = 'translateX(-100%)';
+                        direccionCard.style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            direccionCard.remove();
+                            
+                            // Verificar si quedan direcciones
+                            if (document.querySelectorAll('.direccion-item').length === 0) {
+                                setTimeout(() => location.reload(), 500);
+                            }
+                        }, 500);
+                    } else {
+                        setTimeout(() => location.reload(), 1000);
+                    }
+                } else {
+                    mostrarToast(data.error || 'Error al eliminar dirección', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarToast('Error de conexión', 'danger');
+            })
+            .finally(() => {
+                // Restaurar botón
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                direccionAEliminar = null;
+            });
+        });
+
+        // Función para actualizar estadísticas en tiempo real
+        function actualizarEstadisticas() {
+            const direccionesVisible = document.querySelectorAll('.direccion-item:not([style*="display: none"])');
+            const enZona = Array.from(direccionesVisible).filter(d => d.dataset.zona === 'true').length;
+            
+            // Actualizar contadores si existen
+            const totalStat = document.querySelector('.stat-number');
+            const zonaStat = document.querySelectorAll('.stat-number')[1];
+            
+            if (totalStat) totalStat.textContent = direccionesVisible.length;
+            if (zonaStat) zonaStat.textContent = enZona;
+        }
+
+        // Función para manejar estados de carga
+        function mostrarCargando(elemento, mostrar = true) {
+            if (mostrar) {
+                elemento.classList.add('loading-skeleton');
+                elemento.style.pointerEvents = 'none';
+            } else {
+                elemento.classList.remove('loading-skeleton');
+                elemento.style.pointerEvents = 'auto';
+            }
+        }
+
+        // Mejorar la experiencia de hover en las tarjetas
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.direccion-card').forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-5px)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
+        });
+
+        // Función para manejar errores de imagen en mapas
+        function manejarErrorMapa() {
+            mostrarToast('Error al cargar el mapa. Verifica tu conexión a internet.', 'warning');
+        }
+
+        // Optimización de rendimiento para búsqueda
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Función para exportar direcciones (funcionalidad adicional)
+        function exportarDirecciones() {
+            const direcciones = Array.from(document.querySelectorAll('.direccion-item')).map(item => {
+                return {
+                    nombre: item.dataset.nombre,
+                    direccion: item.dataset.direccion,
+                    principal: item.dataset.principal === 'true',
+                    enZona: item.dataset.zona === 'true'
+                };
+            });
+            
+            const dataStr = JSON.stringify(direcciones, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = 'mis_direcciones.json';
+            link.click();
+            
+            mostrarToast('Direcciones exportadas exitosamente', 'success');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Dirección - Lavandería Digital</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 450px;
+            width: 100%;
+            border-radius: 12px;
+            border: 2px solid #dee2e6;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: border-color 0.3s ease;
+        }
+        
+        #map.map-active {
+            border-color: #0d6efd;
+        }
+        
+        .map-instructions {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .zona-warning {
+            background: linear-gradient(135deg, #fff3cd 0%, #fef7dc 100%);
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .zona-success {
+            background: linear-gradient(135deg, #d1edff 0%, #e8f5e8 100%);
+            border: 1px solid #74c0fc;
+            color: #0c5460;
+            border-left: 4px solid #28a745;
+        }
+        
+        .direccion-actual {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            position: relative;
+        }
+        
+        .direccion-actual.principal {
+            border-color: #ffc107;
+            background: linear-gradient(135deg, #fff3cd 0%, #fef7dc 100%);
+        }
+        
+        .direccion-actual.principal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .busqueda-container {
+            position: relative;
+        }
+        
+        .busqueda-loading {
+            position: absolute;
+            right: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+        }
+        
+        .form-floating .form-control:focus ~ label,
+        .form-floating .form-control:not(:placeholder-shown) ~ label {
+            opacity: .65;
+            transform: scale(.85) translateY(-0.5rem) translateX(0.15rem);
+        }
+        
+        .address-preview {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        
+        .step-indicator {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            color: #6c757d;
+        }
+        
+        .step.active {
+            color: #0d6efd;
+            font-weight: 500;
+        }
+        
+        .step.completed {
+            color: #28a745;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .step.active .step-number {
+            background: #0d6efd;
+            color: white;
+        }
+        
+        .step.completed .step-number {
+            background: #28a745;
+            color: white;
+        }
+        
+        .leaflet-control-custom {
+            background: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        
+        .leaflet-control-custom:hover {
+            background: #f8f9fa;
+            border-color: #0d6efd;
+        }
+        
+        .nombre-sugerencias {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            z-index: 1000;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .sugerencia-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .sugerencia-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .floating-help {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .changes-indicator {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .comparison-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .comparison-item.original {
+            border-left: 4px solid #6c757d;
+        }
+        
+        .comparison-item.modified {
+            border-left: 4px solid #0d6efd;
+        }
+        
+        @media (max-width: 768px) {
+            #map {
+                height: 350px;
+            }
+            
+            .floating-help {
+                position: relative;
+                bottom: auto;
+                right: auto;
+                margin-top: 20px;
+            }
+            
+            .comparison-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .unsaved-changes {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffc107;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1050;
+            display: none;
+        }
+        
+        .direccion-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-right: 15px;
+        }
+        
+        .icon-casa {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .icon-trabajo {
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            color: white;
+        }
+        
+        .icon-otro {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.home') }}">
+                <i class="fas fa-tshirt me-2"></i>Lavandería Digital
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.cotizar') }}">
+                    <i class="fas fa-calculator me-1"></i>Cotizar
+                </a>
+                <a class="nav-link" href="{{ url_for('main.mis_pedidos') }}">
+                    <i class="fas fa-box me-1"></i>Mis Pedidos
+                </a>
+                <a class="nav-link" href="{{ url_for('main.mis_direcciones') }}">
+                    <i class="fas fa-map-marker-alt me-1"></i>Mis Direcciones
+                </a>
+                <a class="nav-link" href="{{ url_for('main.logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Cerrar Sesión
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('main.home') }}" class="text-decoration-none">
+                        <i class="fas fa-home me-1"></i>Inicio
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('main.mis_direcciones') }}" class="text-decoration-none">
+                        <i class="fas fa-map-marker-alt me-1"></i>Mis Direcciones
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    <i class="fas fa-edit me-1"></i>Editar Dirección
+                </li>
+            </ol>
+        </nav>
+
+        <!-- Dirección actual -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="direccion-actual {{ 'principal' if direccion.es_principal else '' }}">
+                    <div class="d-flex align-items-center">
+                        <div class="direccion-icon {{ 'icon-casa' if direccion.nombre.lower() == 'casa' else 'icon-trabajo' if direccion.nombre.lower() == 'trabajo' else 'icon-otro' }}">
+                            <i class="fas fa-{{ 'home' if direccion.nombre.lower() == 'casa' else 'building' if direccion.nombre.lower() == 'trabajo' else 'map-marker-alt' }}"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h4 class="mb-1">
+                                {{ direccion.nombre }}
+                                {% if direccion.es_principal %}
+                                    <span class="badge bg-warning ms-2">
+                                        <i class="fas fa-star me-1"></i>Principal
+                                    </span>
+                                {% endif %}
+                            </h4>
+                            <p class="text-muted mb-2">{{ direccion.direccion }}</p>
+                            {% if direccion.notas %}
+                                <small class="text-muted">
+                                    <i class="fas fa-sticky-note me-1"></i>{{ direccion.notas }}
+                                </small>
+                            {% endif %}
+                        </div>
+                        <div class="text-end">
+                            <span class="badge {{ 'bg-success' if direccion.en_zona_cobertura else 'bg-warning' }} mb-2">
+                                <i class="fas fa-{{ 'check-circle' if direccion.en_zona_cobertura else 'exclamation-triangle' }} me-1"></i>
+                                {{ 'En zona' if direccion.en_zona_cobertura else 'Fuera de zona' }}
+                            </span>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                Agregada: {{ direccion.creada.strftime('%d/%m/%Y') }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicador de pasos -->
+                <div class="step-indicator">
+                    <div class="step active" id="step1">
+                        <div class="step-number">1</div>
+                        <span>Modificar datos básicos</span>
+                    </div>
+                    <div class="step" id="step2">
+                        <div class="step-number">2</div>
+                        <span>Ajustar ubicación (opcional)</span>
+                    </div>
+                    <div class="step" id="step3">
+                        <div class="step-number">3</div>
+                        <span>Guardar cambios</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario principal -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow-lg border-0">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-edit me-2"></i>Editar Dirección: {{ direccion.nombre }}
+                        </h4>
+                    </div>
+                    <div class="card-body p-4">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <!-- Indicador de cambios -->
+                        <div id="changesIndicator" class="changes-indicator" style="display: none;">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <span><strong>Tienes cambios sin guardar</strong> - Los cambios se perderán si sales sin guardar</span>
+                            </div>
+                        </div>
+
+                        <form id="direccionForm" method="POST">
+                            <!-- Paso 1: Datos básicos -->
+                            <div class="mb-4">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-edit me-2"></i>Información básica
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-8 mb-3">
+                                        <div class="form-floating position-relative">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="nombre" 
+                                                   name="nombre" 
+                                                   value="{{ direccion.nombre }}"
+                                                   placeholder="Nombre de la dirección"
+                                                   data-original="{{ direccion.nombre }}"
+                                                   required />
+                                            <label for="nombre">
+                                                <i class="fas fa-tag me-1"></i>Nombre de la dirección
+                                            </label>
+                                            <div class="nombre-sugerencias" id="nombreSugerencias">
+                                                <div class="sugerencia-item" data-nombre="Casa">
+                                                    <i class="fas fa-home me-2"></i>Casa
+                                                </div>
+                                                <div class="sugerencia-item" data-nombre="Trabajo">
+                                                    <i class="fas fa-building me-2"></i>Trabajo
+                                                </div>
+                                                <div class="sugerencia-item" data-nombre="Casa de familia">
+                                                    <i class="fas fa-users me-2"></i>Casa de familia
+                                                </div>
+                                                <div class="sugerencia-item" data-nombre="Oficina">
+                                                    <i class="fas fa-briefcase me-2"></i>Oficina
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-text">
+                                            <i class="fas fa-lightbulb me-1"></i>Dale un nombre fácil de recordar
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100 bg-light">
+                                            <div class="card-body d-flex align-items-center">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           id="es_principal" 
+                                                           name="es_principal"
+                                                           data-original="{{ direccion.es_principal|lower }}"
+                                                           {{ 'checked' if direccion.es_principal else '' }}>
+                                                    <label class="form-check-label" for="es_principal">
+                                                        <i class="fas fa-star text-warning me-1"></i>
+                                                        <strong>Dirección principal</strong>
+                                                        <br><small class="text-muted">Se seleccionará automáticamente</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-floating">
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="notas" 
+                                               name="notas" 
+                                               value="{{ direccion.notas or '' }}"
+                                               data-original="{{ direccion.notas or '' }}"
+                                               placeholder="Referencias" />
+                                        <label for="notas">
+                                            <i class="fas fa-sticky-note me-1"></i>Referencias (opcional)
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Ayúdanos a identificar tu dirección: "Casa verde", "Portón café", "Edificio azul", etc.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Paso 2: Ubicación en mapa -->
+                            <div class="mb-4">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-map-marked-alt me-2"></i>Ajustar ubicación (opcional)
+                                </h5>
+                                
+                                <div class="map-instructions fade-in">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-8">
+                                            <i class="fas fa-info-circle me-2 text-primary"></i>
+                                            <strong>¿Necesitas ajustar la ubicación?</strong>
+                                            <ol class="mb-0 mt-2">
+                                                <li>La ubicación actual se muestra en el mapa</li>
+                                                <li>Busca una nueva dirección si es necesario</li>
+                                                <li>Haz clic en el mapa o arrastra el marcador para ajustar</li>
+                                            </ol>
+                                        </div>
+                                        <div class="col-md-4 text-center">
+                                            <button type="button" class="btn btn-outline-primary" onclick="resetearUbicacion()">
+                                                <i class="fas fa-undo me-1"></i>Restaurar ubicación original
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="busqueda-container mb-3">
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-search text-primary"></i>
+                                        </span>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="buscarDireccion" 
+                                               placeholder="Buscar nueva ubicación: Calle, Colonia, Código Postal..." 
+                                               autocomplete="off" />
+                                        <button type="button" class="btn btn-primary" id="buscarBtn">
+                                            <i class="fas fa-search me-1"></i>Buscar
+                                        </button>
+                                    </div>
+                                    <div class="busqueda-loading">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Buscando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Mapa -->
+                                <div id="map"></div>
+                                
+                                <!-- Información de ubicación -->
+                                <div id="ubicacionInfo" class="mt-3 fade-in">
+                                    <div class="alert zona-{{ 'success' if direccion.en_zona_cobertura else 'warning' }}" id="zonaStatus">
+                                        <div class="d-flex align-items-center">
+                                            <div class="flex-grow-1">
+                                                <i class="fas fa-{{ 'check-circle' if direccion.en_zona_cobertura else 'exclamation-triangle' }} me-2"></i>
+                                                <strong>{{ 'Ubicación en zona de cobertura' if direccion.en_zona_cobertura else 'Ubicación fuera de zona de cobertura' }}</strong>
+                                                <br><span class="small" id="ubicacionTexto">{{ direccion.direccion }}</span>
+                                            </div>
+                                            <div class="flex-shrink-0">
+                                                <span id="distanciaTexto" class="badge bg-{{ 'success' if direccion.en_zona_cobertura else 'warning' }}">
+                                                    Zona {{ 'cubierta' if direccion.en_zona_cobertura else 'no cubierta' }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Paso 3: Preview de cambios -->
+                            <div id="previewCambios" class="mb-4" style="display: none;">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-eye me-2"></i>Vista previa de cambios
+                                </h5>
+                                
+                                <div class="comparison-container" id="comparisonContainer">
+                                    <!-- Se llena dinámicamente con JavaScript -->
+                                </div>
+                            </div>
+
+                            <!-- Campo de dirección oculto -->
+                            <textarea class="form-control" 
+                                     id="direccion" 
+                                     name="direccion" 
+                                     rows="2" 
+                                     required 
+                                     readonly
+                                     style="display: none;">{{ direccion.direccion }}</textarea>
+                            
+                            <!-- Campos ocultos -->
+                            <input type="hidden" id="latitud" name="latitud" value="{{ direccion.latitud }}" data-original="{{ direccion.latitud }}" />
+                            <input type="hidden" id="longitud" name="longitud" value="{{ direccion.longitud }}" data-original="{{ direccion.longitud }}" />
+
+                            <!-- Botones de acción -->
+                            <div class="d-flex gap-2 mt-4">
+                                <a href="{{ url_for('main.mis_direcciones') }}" class="btn btn-outline-secondary" id="cancelarBtn">
+                                    <i class="fas fa-arrow-left me-2"></i>Cancelar
+                                </a>
+                                <button type="button" class="btn btn-outline-info" onclick="mostrarComparacion()">
+                                    <i class="fas fa-eye me-2"></i>Ver Cambios
+                                </button>
+                                <button type="submit" class="btn btn-primary flex-fill btn-lg" id="submitBtn">
+                                    <i class="fas fa-save me-2"></i>Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ayuda flotante -->
+    <div class="floating-help">
+        <div class="dropdown">
+            <button class="btn btn-info btn-lg rounded-circle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-question"></i>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end p-3" style="width: 300px;">
+                <h6><i class="fas fa-lightbulb me-2"></i>Consejos para editar</h6>
+                <ul class="small mb-0">
+                    <li>Solo cambia lo que necesites modificar</li>
+                    <li>Puedes ajustar la ubicación en el mapa</li>
+                    <li>Los cambios se marcan automáticamente</li>
+                    <li>Usa "Ver Cambios" antes de guardar</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de cambios sin guardar -->
+    <div class="unsaved-changes" id="unsavedChanges">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Cambios sin guardar</strong>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+    <!-- Modal de confirmación de salida -->
+    <div class="modal fade" id="exitModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        Cambios sin guardar
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Los cambios se perderán si no los guardas.</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Quedarse
+                    </button>
+                    <button type="button" class="btn btn-warning" id="confirmarSalida">
+                        <i class="fas fa-sign-out-alt me-2"></i>Salir sin guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        let mapa = null;
+        let marcador = null;
+        let coordenadasSeleccionadas = null;
+        let coordenadasOriginales = null;
+        let zonaCobertura = null;
+        let tieneCarmbiosNoGuardados = false;
+        
+        const CENTRO_CDMX = [19.4326, -99.1332];
+        const RADIO_COBERTURA = 25000; // 25km en metros
+        
+        // Datos originales para comparación
+        const datosOriginales = {
+            nombre: '{{ direccion.nombre }}',
+            notas: '{{ direccion.notas or "" }}',
+            es_principal: {{ direccion.es_principal|lower }},
+            latitud: {{ direccion.latitud }},
+            longitud: {{ direccion.longitud }},
+            direccion: '{{ direccion.direccion }}'
+        };
+        
+        function inicializarMapa() {
+            const lat = {{ direccion.latitud }};
+            const lng = {{ direccion.longitud }};
+            
+            coordenadasOriginales = {lat, lng};
+            coordenadasSeleccionadas = {lat, lng};
+            
+            mapa = L.map('map').setView([lat, lng], 16);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapa);
+            
+            // Zona de cobertura
+            zonaCobertura = L.circle(CENTRO_CDMX, {
+                color: '#007bff',
+                fillColor: '#007bff',
+                fillOpacity: 0.1,
+                weight: 2,
+                radius: RADIO_COBERTURA
+            }).addTo(mapa);
+            
+            zonaCobertura.bindPopup(`
+                <div class="text-center">
+                    <i class="fas fa-truck fa-2x text-primary mb-2"></i>
+                    <h6>Zona de Cobertura</h6>
+                    <p class="mb-0 small">Brindamos servicio dentro de este área</p>
+                </div>
+            `);
+            
+            // Marcador inicial
+            marcador = L.marker([lat, lng], {
+                draggable: true,
+                title: 'Arrastra para ajustar la ubicación'
+            }).addTo(mapa);
+            
+            marcador.bindPopup(`
+                <div class="text-center">
+                    <i class="fas fa-home fa-2x text-primary mb-2"></i>
+                    <h6>{{ direccion.nombre }}</h6>
+                    <p class="mb-0 small">{{ direccion.direccion }}</p>
+                </div>
+            `);
+            
+            // Event listeners del mapa
+            mapa.on('click', function(e) {
+                seleccionarUbicacion(e.latlng.lat, e.latlng.lng);
+            });
+            
+            marcador.on('dragend', function(e) {
+                const pos = e.target.getLatLng();
+                seleccionarUbicacion(pos.lat, pos.lng);
+            });
+            
+            // Agregar controles personalizados
+            agregarControlesMapa();
+        }
+        
+        function agregarControlesMapa() {
+            // Botón de ubicación actual
+            const botonUbicacion = L.control({position: 'topright'});
+            botonUbicacion.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+                div.innerHTML = '<i class="fas fa-location-arrow" style="margin: 10px; color: #333; font-size: 16px;"></i>';
+                div.title = 'Detectar mi ubicación actual';
+                div.style.cursor = 'pointer';
+                div.style.width = '40px';
+                div.style.height = '40px';
+                div.style.lineHeight = '40px';
+                div.style.textAlign = 'center';
+                
+                div.onclick = function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    detectarUbicacionActual();
+                };
+                
+                return div;
+            };
+            botonUbicacion.addTo(mapa);
+            
+            // Botón de restaurar ubicación original
+            const botonRestaurar = L.control({position: 'topright'});
+            botonRestaurar.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+                div.innerHTML = '<i class="fas fa-undo" style="margin: 10px; color: #333; font-size: 16px;"></i>';
+                div.title = 'Restaurar ubicación original';
+                div.style.cursor = 'pointer';
+                div.style.width = '40px';
+                div.style.height = '40px';
+                div.style.lineHeight = '40px';
+                div.style.textAlign = 'center';
+                
+                div.onclick = function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    resetearUbicacion();
+                };
+                
+                return div;
+            };
+            botonRestaurar.addTo(mapa);
+        }
+        
+        function detectarUbicacionActual() {
+            if (!navigator.geolocation) {
+                mostrarToast('Tu navegador no soporta geolocalización', 'warning');
+                return;
+            }
+            
+            mostrarToast('Detectando tu ubicación...', 'info');
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    mapa.setView([lat, lng], 16);
+                    seleccionarUbicacion(lat, lng);
+                    mostrarToast('¡Ubicación detectada!', 'success');
+                },
+                function(error) {
+                    let mensaje = 'Error obteniendo ubicación';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            mensaje = 'Permiso de ubicación denegado';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            mensaje = 'Ubicación no disponible';
+                            break;
+                        case error.TIMEOUT:
+                            mensaje = 'Tiempo de espera agotado';
+                            break;
+                    }
+                    mostrarToast(mensaje, 'danger');
+                }
+            );
+        }
+        
+        function resetearUbicacion() {
+            const lat = coordenadasOriginales.lat;
+            const lng = coordenadasOriginales.lng;
+            
+            mapa.setView([lat, lng], 16);
+            marcador.setLatLng([lat, lng]);
+            
+            coordenadasSeleccionadas = {lat, lng};
+            document.getElementById('latitud').value = lat;
+            document.getElementById('longitud').value = lng;
+            document.getElementById('direccion').value = datosOriginales.direccion;
+            
+            // Actualizar información de zona
+            verificarZonaCobertura(lat, lng);
+            document.getElementById('ubicacionTexto').textContent = datosOriginales.direccion;
+            
+            mostrarToast('Ubicación restaurada a la original', 'info');
+            verificarCambios();
+        }
+        
+        function seleccionarUbicacion(lat, lng) {
+            // Actualizar marcador
+            marcador.setLatLng([lat, lng]);
+            
+            // Guardar coordenadas
+            coordenadasSeleccionadas = {lat: lat, lng: lng};
+            document.getElementById('latitud').value = lat.toFixed(6);
+            document.getElementById('longitud').value = lng.toFixed(6);
+            
+            // Actualizar pasos
+            actualizarPaso(2);
+            
+            // Obtener dirección y verificar zona
+            obtenerDireccionDeCoordenadas(lat, lng);
+            verificarZonaCobertura(lat, lng);
+            verificarCambios();
+        }
+        
+        function obtenerDireccionDeCoordenadas(lat, lng) {
+            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=es`;
+            
+            fetch(url, {
+                headers: {
+                    'User-Agent': 'Lavanderia-Digital/1.0'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const direccion = formatearDireccion(data);
+                document.getElementById('direccion').value = direccion;
+                document.getElementById('ubicacionTexto').textContent = direccion;
+            })
+            .catch(error => {
+                console.error('Error obteniendo dirección:', error);
+                const coordenadas = `Coordenadas: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                document.getElementById('direccion').value = coordenadas;
+                document.getElementById('ubicacionTexto').textContent = coordenadas;
+            });
+        }
+        
+        function formatearDireccion(data) {
+            const addr = data.address || {};
+            const componentes = [];
+            
+            // Número y calle
+            if (addr.house_number && addr.road) {
+                componentes.push(`${addr.road} ${addr.house_number}`);
+            } else if (addr.road) {
+                componentes.push(addr.road);
+            }
+            
+            // Colonia/Barrio
+            if (addr.neighbourhood) {
+                componentes.push(addr.neighbourhood);
+            } else if (addr.suburb) {
+                componentes.push(addr.suburb);
+            } else if (addr.quarter) {
+                componentes.push(addr.quarter);
+            }
+            
+            // Delegación/Municipio
+            if (addr.city_district) {
+                componentes.push(addr.city_district);
+            } else if (addr.municipality) {
+                componentes.push(addr.municipality);
+            }
+            
+            // Ciudad
+            if (addr.city) {
+                componentes.push(addr.city);
+            } else {
+                componentes.push('Ciudad de México');
+            }
+            
+            // Código postal
+            if (addr.postcode) {
+                componentes.push(`C.P. ${addr.postcode}`);
+            }
+            
+            return componentes.join(', ');
+        }
+        
+        function verificarZonaCobertura(lat, lng) {
+            const zonaStatus = document.getElementById('zonaStatus');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            const distancia = calcularDistancia(lat, lng, CENTRO_CDMX[0], CENTRO_CDMX[1]);
+            const distanciaKm = Math.round(distancia * 10) / 10;
+            
+            if (distancia <= 25) {
+                zonaStatus.className = 'alert zona-success';
+                zonaStatus.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>¡Excelente!</strong> Esta ubicación está dentro de nuestra zona de cobertura.
+                            <br><span class="small" id="ubicacionTexto"></span>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span id="distanciaTexto" class="badge bg-success">${distanciaKm} km del centro</span>
+                        </div>
+                    </div>
+                `;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Guardar Cambios';
+            } else {
+                zonaStatus.className = 'alert zona-warning';
+                zonaStatus.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Zona no cubierta:</strong> Esta ubicación está fuera de nuestra área de servicio.
+                            <br><span class="small" id="ubicacionTexto"></span>
+                            <br><small>Solo brindamos servicio dentro de los primeros 25 km del centro de la ciudad.</small>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span id="distanciaTexto" class="badge bg-warning">${distanciaKm} km del centro</span>
+                        </div>
+                    </div>
+                `;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-times me-2"></i>Zona no cubierta';
+            }
+        }
+        
+        function calcularDistancia(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Radio de la Tierra en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        function buscarDireccion() {
+            const query = document.getElementById('buscarDireccion').value.trim();
+            if (query.length < 3) {
+                mostrarToast('Ingresa al menos 3 caracteres para buscar', 'warning');
+                return;
+            }
+            
+            const loadingElement = document.querySelector('.busqueda-loading');
+            const buscarBtn = document.getElementById('buscarBtn');
+            
+            loadingElement.style.display = 'block';
+            buscarBtn.disabled = true;
+            
+            const searchQuery = `${query}, Ciudad de México, México`;
+            const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&addressdetails=1&countrycodes=mx&accept-language=es`;
+            
+            fetch(url, {
+                headers: {
+                    'User-Agent': 'Lavanderia-Digital/1.0'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingElement.style.display = 'none';
+                buscarBtn.disabled = false;
+                
+                if (data.length > 0) {
+                    const resultado = data[0];
+                    const lat = parseFloat(resultado.lat);
+                    const lng = parseFloat(resultado.lon);
+                    
+                    mapa.setView([lat, lng], 16);
+                    seleccionarUbicacion(lat, lng);
+                    mostrarToast('¡Dirección encontrada!', 'success');
+                } else {
+                    mostrarToast('No se encontró la dirección. Intenta con términos más específicos.', 'warning');
+                }
+            })
+            .catch(error => {
+                loadingElement.style.display = 'none';
+                buscarBtn.disabled = false;
+                console.error('Error en búsqueda:', error);
+                mostrarToast('Error al buscar la dirección. Inténtalo de nuevo.', 'danger');
+            });
+        }
+        
+        function verificarCambios() {
+            const nombre = document.getElementById('nombre').value.trim();
+            const notas = document.getElementById('notas').value.trim();
+            const esPrincipal = document.getElementById('es_principal').checked;
+            const latitud = parseFloat(document.getElementById('latitud').value);
+            const longitud = parseFloat(document.getElementById('longitud').value);
+            
+            const tieneCambios = 
+                nombre !== datosOriginales.nombre ||
+                notas !== datosOriginales.notas ||
+                esPrincipal !== datosOriginales.es_principal ||
+                Math.abs(latitud - datosOriginales.latitud) > 0.0001 ||
+                Math.abs(longitud - datosOriginales.longitud) > 0.0001;
+            
+            tieneCarmbiosNoGuardados = tieneCambios;
+            
+            // Mostrar/ocultar indicadores
+            const changesIndicator = document.getElementById('changesIndicator');
+            const unsavedChanges = document.getElementById('unsavedChanges');
+            
+            if (tieneCambios) {
+                changesIndicator.style.display = 'block';
+                unsavedChanges.style.display = 'block';
+                actualizarPaso(3);
+            } else {
+                changesIndicator.style.display = 'none';
+                unsavedChanges.style.display = 'none';
+            }
+        }
+        
+        function mostrarComparacion() {
+            const nombre = document.getElementById('nombre').value.trim();
+            const notas = document.getElementById('notas').value.trim();
+            const esPrincipal = document.getElementById('es_principal').checked;
+            const direccion = document.getElementById('direccion').value;
+            
+            const comparisonContainer = document.getElementById('comparisonContainer');
+            
+            const cambios = [];
+            if (nombre !== datosOriginales.nombre) {
+                cambios.push({
+                    campo: 'Nombre',
+                    original: datosOriginales.nombre,
+                    nuevo: nombre
+                });
+            }
+            
+            if (notas !== datosOriginales.notas) {
+                cambios.push({
+                    campo: 'Referencias',
+                    original: datosOriginales.notas || 'Sin referencias',
+                    nuevo: notas || 'Sin referencias'
+                });
+            }
+            
+            if (esPrincipal !== datosOriginales.es_principal) {
+                cambios.push({
+                    campo: 'Dirección principal',
+                    original: datosOriginales.es_principal ? 'Sí' : 'No',
+                    nuevo: esPrincipal ? 'Sí' : 'No'
+                });
+            }
+            
+            const latitud = parseFloat(document.getElementById('latitud').value);
+            const longitud = parseFloat(document.getElementById('longitud').value);
+            
+            if (Math.abs(latitud - datosOriginales.latitud) > 0.0001 || 
+                Math.abs(longitud - datosOriginales.longitud) > 0.0001) {
+                cambios.push({
+                    campo: 'Ubicación',
+                    original: datosOriginales.direccion,
+                    nuevo: direccion
+                });
+            }
+            
+            if (cambios.length === 0) {
+                mostrarToast('No hay cambios para mostrar', 'info');
+                return;
+            }
+            
+            let html = '';
+            cambios.forEach(cambio => {
+                html += `
+                    <div class="comparison-item original">
+                        <h6 class="text-muted">Original - ${cambio.campo}</h6>
+                        <p class="mb-0">${cambio.original}</p>
+                    </div>
+                    <div class="comparison-item modified">
+                        <h6 class="text-primary">Nuevo - ${cambio.campo}</h6>
+                        <p class="mb-0">${cambio.nuevo}</p>
+                    </div>
+                `;
+            });
+            
+            comparisonContainer.innerHTML = html;
+            document.getElementById('previewCambios').style.display = 'block';
+            
+            // Scroll hacia la comparación
+            document.getElementById('previewCambios').scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+        
+        function actualizarPaso(paso) {
+            // Resetear todos los pasos
+            for (let i = 1; i <= 3; i++) {
+                const stepElement = document.getElementById(`step${i}`);
+                stepElement.classList.remove('active', 'completed');
+                
+                if (i < paso) {
+                    stepElement.classList.add('completed');
+                } else if (i === paso) {
+                    stepElement.classList.add('active');
+                }
+            }
+        }
+        
+        function configurarSugerenciasNombre() {
+            const nombreInput = document.getElementById('nombre');
+            const sugerenciasContainer = document.getElementById('nombreSugerencias');
+            
+            nombreInput.addEventListener('focus', function() {
+                if (this.value.length === 0) {
+                    sugerenciasContainer.style.display = 'block';
+                }
+            });
+            
+            nombreInput.addEventListener('blur', function() {
+                setTimeout(() => {
+                    sugerenciasContainer.style.display = 'none';
+                }, 200);
+            });
+            
+            nombreInput.addEventListener('input', function() {
+                if (this.value.length === 0) {
+                    sugerenciasContainer.style.display = 'block';
+                } else {
+                    sugerenciasContainer.style.display = 'none';
+                }
+                verificarCambios();
+            });
+            
+            // Event listeners para sugerencias
+            document.querySelectorAll('.sugerencia-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const nombre = this.dataset.nombre;
+                    nombreInput.value = nombre;
+                    sugerenciasContainer.style.display = 'none';
+                    verificarCambios();
+                });
+            });
+        }
+        
+        function mostrarToast(mensaje, tipo = 'info') {
+            const toastContainer = document.querySelector('.toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const iconos = {
+                success: 'check-circle',
+                danger: 'exclamation-triangle',
+                warning: 'exclamation-triangle',
+                info: 'info-circle'
+            };
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header text-${tipo}">
+                        <i class="fas fa-${iconos[tipo]} me-2"></i>
+                        <strong class="me-auto">Lavandería Digital</strong>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${mensaje}
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function () {
+                toastElement.remove();
+            });
+        }
+        
+        // Event listeners principales
+        document.addEventListener('DOMContentLoaded', function() {
+            inicializarMapa();
+            configurarSugerenciasNombre();
+            
+            // Buscar dirección
+            document.getElementById('buscarBtn').addEventListener('click', buscarDireccion);
+            
+            document.getElementById('buscarDireccion').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    buscarDireccion();
+                }
+            });
+            
+            // Detectar cambios en campos
+            document.getElementById('nombre').addEventListener('input', verificarCambios);
+            document.getElementById('notas').addEventListener('input', verificarCambios);
+            document.getElementById('es_principal').addEventListener('change', verificarCambios);
+            
+            // Prevenir salida sin guardar
+            const exitModal = new bootstrap.Modal(document.getElementById('exitModal'));
+            
+            document.getElementById('cancelarBtn').addEventListener('click', function(e) {
+                if (tieneCarmbiosNoGuardados) {
+                    e.preventDefault();
+                    exitModal.show();
+                }
+            });
+            
+            document.getElementById('confirmarSalida').addEventListener('click', function() {
+                window.location.href = "{{ url_for('main.mis_direcciones') }}";
+            });
+            
+            // Advertencia antes de cerrar página
+            window.addEventListener('beforeunload', function(e) {
+                if (tieneCarmbiosNoGuardados) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+            
+            // Validación del formulario
+            document.getElementById('direccionForm').addEventListener('submit', function(e) {
+                if (!coordenadasSeleccionadas) {
+                    e.preventDefault();
+                    mostrarToast('Error: No se han seleccionado coordenadas válidas', 'danger');
+                    return false;
+                }
+                
+                const distancia = calcularDistancia(
+                    coordenadasSeleccionadas.lat, 
+                    coordenadasSeleccionadas.lng, 
+                    CENTRO_CDMX[0], 
+                    CENTRO_CDMX[1]
+                );
+                
+                if (distancia > 25) {
+                    e.preventDefault();
+                    mostrarToast('Esta ubicación está fuera de nuestra zona de cobertura.', 'danger');
+                    return false;
+                }
+                
+                // Mostrar mensaje de guardado
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando cambios...';
+                submitBtn.disabled = true;
+                
+                // Permitir envío
+                tieneCarmbiosNoGuardados = false;
+            });
+        });
+    </script>
+</body>
+</html>
