@@ -1026,13 +1026,38 @@ def confirmar_pedido():
             db.session.add(item_pedido)
         
         db.session.commit()
+
+        # Notificación Telegram
+        try:
+            import sys
+            sys.path.append('.')
+            from bot_completo import notificar_pedido_flask
+            from app.models import Usuario
+            
+            # Obtener usuario para notificación
+            usuario_actual = Usuario.query.get(session["usuario_id"])
+            nombre_usuario = usuario_actual.nombre if usuario_actual else "Usuario"
+            
+            result = notificar_pedido_flask(
+                nuevo_pedido.id,
+                nombre_usuario,
+                direccion_texto,
+                nuevo_pedido.precio_total
+            )
+            
+            print(f"✅ Resultado notificación Telegram: {result}")
+            
+        except Exception as e:
+            print(f"❌ Error Telegram completo: {e}")
+            import traceback
+            traceback.print_exc()
         
         # ¡NUEVO! Enviar notificaciones automáticas
-        try:
-            enviar_notificacion_pedido_confirmado(nuevo_pedido.id)
-        except Exception as e:
-            logger.error(f"Error enviando notificaciones: {e}")
-            # No fallar el pedido por errores de notificación
+        #try:
+        #    enviar_notificacion_pedido_confirmado(nuevo_pedido.id)
+        #except Exception as e:
+        #    logger.error(f"Error enviando notificaciones: {e}")
+        #    # No fallar el pedido por errores de notificación
         
         flash("¡Pedido creado exitosamente! Te hemos enviado un email de confirmación.", "success")
         return jsonify({"success": True, "pedido_id": nuevo_pedido.id})

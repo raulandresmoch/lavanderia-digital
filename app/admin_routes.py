@@ -1,8 +1,12 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, Admin, Pedido, Usuario, TipoPrenda, EstadisticasPedidos
+from app.models import db, Admin, Pedido, Usuario, TipoPrenda, EstadisticasPedidos, DireccionUsuario
 from datetime import datetime, timedelta
 from functools import wraps
+import logging
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -134,6 +138,7 @@ def actualizar_estado():
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Error actualizando estado: {e}")
         return jsonify({"error": str(e)}), 500
 
 # === RUTAS DIARIAS ===
@@ -142,7 +147,11 @@ def actualizar_estado():
 @admin_required
 def rutas():
     fecha_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
-    fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    try:
+        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    except ValueError:
+        fecha = datetime.now().date()
+        fecha_str = fecha.strftime('%Y-%m-%d')
     
     # Recolecciones del día
     recolecciones = Pedido.query.filter(
@@ -168,44 +177,93 @@ def generar_ruta_optimizada():
     """Generar ruta optimizada básica (por zona)"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "No se recibieron datos"}), 400
+            
         fecha_str = data.get("fecha")
         tipo = data.get("tipo")  # 'recoleccion' o 'entrega'
         
-        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        if not fecha_str or not tipo:
+            return jsonify({"error": "Faltan parámetros requeridos"}), 400
         
+        try:
+            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({"error": "Formato de fecha inválido"}), 400
+        
+        logger.info(f"Generando ruta para {fecha} tipo {tipo}")
+        
+        # Obtener pedidos según el tipo
         if tipo == 'recoleccion':
             pedidos = Pedido.query.filter(
                 Pedido.fecha_recoleccion == fecha,
                 Pedido.estado == 'Solicitado'
             ).all()
-        else:
+        elif tipo == 'entrega':
             pedidos = Pedido.query.filter(
                 Pedido.fecha_entrega == fecha,
                 Pedido.estado == 'Listo'
             ).all()
+        else:
+            return jsonify({"error": "Tipo de ruta inválido"}), 400
+        
+        logger.info(f"Encontrados {len(pedidos)} pedidos para procesar")
+        
+        if not pedidos:
+            return jsonify({
+                "success": True,
+                "rutas": {},
+                "total_pedidos": 0,
+                "mensaje": f"No hay pedidos de {tipo} para esta fecha"
+            })
         
         # Agrupación básica por zona (primeras 3 palabras de la dirección)
         rutas_por_zona = {}
+        
         for pedido in pedidos:
-            zona = ' '.join(pedido.direccion.split()[:3])
-            if zona not in rutas_por_zona:
-                rutas_por_zona[zona] = []
-            rutas_por_zona[zona].append({
-                'id': pedido.id,
-                'direccion': pedido.direccion,
-                'cliente': pedido.usuario.nombre,
-                'telefono': pedido.usuario.telefono or 'No registrado',
-                'notas': pedido.notas or ''
-            })
+            try:
+                # Crear zona basada en las primeras palabras de la dirección
+                palabras_direccion = pedido.direccion.split()
+                zona = ' '.join(palabras_direccion[:3]) if len(palabras_direccion) >= 3 else pedido.direccion
+                
+                if zona not in rutas_por_zona:
+                    rutas_por_zona[zona] = []
+                
+                # Obtener información del usuario
+                usuario = pedido.usuario
+                telefono = usuario.telefono if usuario.telefono else 'No registrado'
+                
+                pedido_info = {
+                    'id': pedido.id,
+                    'direccion': pedido.direccion,
+                    'cliente': usuario.nombre,
+                    'telefono': telefono,
+                    'notas': pedido.notas or '',
+                    'total': float(pedido.precio_total),
+                    'estado': pedido.estado
+                }
+                
+                rutas_por_zona[zona].append(pedido_info)
+                
+            except Exception as e:
+                logger.error(f"Error procesando pedido {pedido.id}: {e}")
+                continue
+        
+        logger.info(f"Rutas generadas: {len(rutas_por_zona)} zonas")
         
         return jsonify({
             "success": True,
             "rutas": rutas_por_zona,
-            "total_pedidos": len(pedidos)
+            "total_pedidos": len(pedidos),
+            "tipo": tipo,
+            "fecha": fecha_str
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error en generar_ruta_optimizada: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Error interno: {str(e)}"}), 500
 
 # === REPORTES ===
 

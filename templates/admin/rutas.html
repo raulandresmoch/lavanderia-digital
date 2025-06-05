@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Rutas - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .ruta-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        .ruta-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .recoleccion-card { border-left-color: #28a745; }
+        .entrega-card { border-left-color: #ffc107; }
+        .pedido-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            padding: 12px;
+            border-left: 3px solid #dee2e6;
+        }
+        .zona-header {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navbar Admin -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('admin.dashboard') }}">
+                <i class="fas fa-shield-alt me-2"></i>Admin Panel
+            </a>
+            
+            <div class="navbar-nav me-auto">
+                <a class="nav-link" href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+                <a class="nav-link" href="{{ url_for('admin.pedidos') }}">Pedidos</a>
+                <a class="nav-link active" href="{{ url_for('admin.rutas') }}">Rutas</a>
+            </div>
+            
+            <div class="navbar-nav">
+                <span class="navbar-text me-3">
+                    <i class="fas fa-user-shield me-1"></i>{{ session.admin_nombre }}
+                </span>
+                <a class="nav-link" href="{{ url_for('admin.logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>Salir
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid my-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2><i class="fas fa-route me-2"></i>Gestión de Rutas</h2>
+                <p class="text-muted">Organiza y optimiza las rutas de recolección y entrega</p>
+            </div>
+            <div class="col-md-4">
+                <!-- Selector de fecha -->
+                <div class="card">
+                    <div class="card-body">
+                        <label class="form-label"><i class="fas fa-calendar me-1"></i>Fecha:</label>
+                        <input type="date" 
+                               class="form-control" 
+                               id="fechaSelector" 
+                               value="{{ fecha_str }}"
+                               onchange="cambiarFecha()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadísticas del día -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center border-success">
+                    <div class="card-body">
+                        <i class="fas fa-truck fa-2x text-success mb-2"></i>
+                        <h4 class="text-success">{{ recolecciones|length }}</h4>
+                        <p class="mb-0">Recolecciones</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-warning">
+                    <div class="card-body">
+                        <i class="fas fa-home fa-2x text-warning mb-2"></i>
+                        <h4 class="text-warning">{{ entregas|length }}</h4>
+                        <p class="mb-0">Entregas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-info">
+                    <div class="card-body">
+                        <i class="fas fa-map-marked-alt fa-2x text-info mb-2"></i>
+                        <h4 class="text-info" id="totalParadas">{{ (recolecciones|length) + (entregas|length) }}</h4>
+                        <p class="mb-0">Total Paradas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-primary">
+                    <div class="card-body">
+                        <i class="fas fa-route fa-2x text-primary mb-2"></i>
+                        <h4 class="text-primary" id="rutasGeneradas">0</h4>
+                        <p class="mb-0">Rutas Generadas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Recolecciones -->
+            <div class="col-lg-6">
+                <div class="card ruta-card recoleccion-card mb-4">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-truck me-2"></i>Recolecciones - {{ fecha.strftime('%d/%m/%Y') }}
+                        </h5>
+                        <button class="btn btn-light btn-sm" onclick="generarRuta('recoleccion')">
+                            <i class="fas fa-route me-1"></i>Generar Ruta
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if recolecciones %}
+                            <div id="recoleccionesContainer">
+                                {% for pedido in recolecciones %}
+                                    <div class="pedido-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">
+                                                    <span class="badge bg-primary me-2">#{{ pedido.id }}</span>
+                                                    {{ pedido.usuario.nombre }}
+                                                </h6>
+                                                <p class="mb-1 text-muted small">
+                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ pedido.direccion }}
+                                                </p>
+                                                <div class="d-flex justify-content-between">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-phone me-1"></i>{{ pedido.usuario.telefono or 'No registrado' }}
+                                                    </small>
+                                                    <small class="text-success fw-bold">
+                                                        ${{ "%.2f" | format(pedido.precio_total) }}
+                                                    </small>
+                                                </div>
+                                                {% if pedido.notas %}
+                                                    <small class="text-warning">
+                                                        <i class="fas fa-sticky-note me-1"></i>{{ pedido.notas }}
+                                                    </small>
+                                                {% endif %}
+                                            </div>
+                                            <div class="ms-3">
+                                                <span class="badge bg-{{ 'success' if pedido.estado == 'Recolectado' else 'secondary' }}">
+                                                    {{ pedido.estado }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No hay recolecciones programadas para este día</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entregas -->
+            <div class="col-lg-6">
+                <div class="card ruta-card entrega-card mb-4">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-home me-2"></i>Entregas - {{ fecha.strftime('%d/%m/%Y') }}
+                        </h5>
+                        <button class="btn btn-dark btn-sm" onclick="generarRuta('entrega')">
+                            <i class="fas fa-route me-1"></i>Generar Ruta
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if entregas %}
+                            <div id="entregasContainer">
+                                {% for pedido in entregas %}
+                                    <div class="pedido-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">
+                                                    <span class="badge bg-warning text-dark me-2">#{{ pedido.id }}</span>
+                                                    {{ pedido.usuario.nombre }}
+                                                </h6>
+                                                <p class="mb-1 text-muted small">
+                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ pedido.direccion }}
+                                                </p>
+                                                <div class="d-flex justify-content-between">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-phone me-1"></i>{{ pedido.usuario.telefono or 'No registrado' }}
+                                                    </small>
+                                                    <small class="text-success fw-bold">
+                                                        ${{ "%.2f" | format(pedido.precio_total) }}
+                                                    </small>
+                                                </div>
+                                                {% if pedido.notas %}
+                                                    <small class="text-warning">
+                                                        <i class="fas fa-sticky-note me-1"></i>{{ pedido.notas }}
+                                                    </small>
+                                                {% endif %}
+                                            </div>
+                                            <div class="ms-3">
+                                                <span class="badge bg-{{ 'success' if pedido.estado == 'Entregado' else 'warning' }}">
+                                                    {{ pedido.estado }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-home fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No hay entregas programadas para este día</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rutas Generadas -->
+        <div id="rutasGeneradasContainer" style="display: none;">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marked-alt me-2"></i>Rutas Optimizadas
+                    </h5>
+                </div>
+                <div class="card-body" id="rutasContent">
+                    <!-- Las rutas se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="mb-0">Generando ruta optimizada...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function cambiarFecha() {
+            const fecha = document.getElementById('fechaSelector').value;
+            window.location.href = `{{ url_for('admin.rutas') }}?fecha=${fecha}`;
+        }
+
+        function generarRuta(tipo) {
+            const fecha = document.getElementById('fechaSelector').value;
+            
+            // Mostrar modal de carga
+            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            
+            fetch('/admin/api/generar-ruta-optimizada', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    fecha: fecha,
+                    tipo: tipo
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingModal.hide();
+                
+                if (data.success) {
+                    mostrarRutasGeneradas(data.rutas, tipo, data.total_pedidos);
+                    
+                    // Actualizar contador
+                    const totalRutas = Object.keys(data.rutas).length;
+                    document.getElementById('rutasGeneradas').textContent = totalRutas;
+                    
+                    // Mostrar notificación
+                    mostrarNotificacion(`Ruta de ${tipo} generada exitosamente: ${totalRutas} zonas`, 'success');
+                } else {
+                    mostrarNotificacion('Error generando ruta: ' + (data.error || 'Error desconocido'), 'danger');
+                }
+            })
+            .catch(error => {
+                loadingModal.hide();
+                console.error('Error:', error);
+                mostrarNotificacion('Error de conexión', 'danger');
+            });
+        }
+
+        function mostrarRutasGeneradas(rutas, tipo, totalPedidos) {
+            const container = document.getElementById('rutasGeneradasContainer');
+            const content = document.getElementById('rutasContent');
+            
+            let html = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Ruta de ${tipo} generada:</strong> ${Object.keys(rutas).length} zonas con ${totalPedidos} pedidos
+                </div>
+            `;
+            
+            let zonaIndex = 1;
+            for (const [zona, pedidos] of Object.entries(rutas)) {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header zona-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i>
+                                Zona ${zonaIndex}: ${zona} (${pedidos.length} paradas)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                `;
+                
+                pedidos.forEach((pedido, index) => {
+                    html += `
+                        <div class="col-md-6 mb-2">
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-primary me-2">${index + 1}</span>
+                                <div class="flex-grow-1">
+                                    <strong>Pedido #${pedido.id}</strong> - ${pedido.cliente}<br>
+                                    <small class="text-muted">${pedido.direccion}</small><br>
+                                    <small class="text-info">📱 ${pedido.telefono}</small>
+                                    ${pedido.notas ? `<br><small class="text-warning">📝 ${pedido.notas}</small>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-success btn-sm me-2">
+                                    <i class="fas fa-paper-plane me-1"></i>Enviar a Repartidor
+                                </button>
+                                <button class="btn btn-outline-primary btn-sm" onclick="verEnMapa('${zona}')">
+                                    <i class="fas fa-map me-1"></i>Ver en Mapa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                zonaIndex++;
+            }
+            
+            content.innerHTML = html;
+            container.style.display = 'block';
+            
+            // Scroll suave hacia las rutas
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function verEnMapa(zona) {
+            // Aquí podrías integrar con Google Maps o Leaflet
+            mostrarNotificacion(`Función de mapa para zona "${zona}" en desarrollo`, 'info');
+        }
+
+        function mostrarNotificacion(mensaje, tipo) {
+            // Crear notificación bootstrap
+            const alertHTML = `
+                <div class="alert alert-${tipo} alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;" role="alert">
+                    ${mensaje}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', alertHTML);
+            
+            // Auto-remove después de 4 segundos
+            setTimeout(() => {
+                const alerts = document.querySelectorAll('.alert');
+                if (alerts.length > 0) {
+                    alerts[alerts.length - 1].remove();
+                }
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

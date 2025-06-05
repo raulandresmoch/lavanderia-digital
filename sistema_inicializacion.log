@@ -13,3 +13,132 @@
 2025-06-03 13:23:56,087 - INFO - 
 ==================================================
 2025-06-03 13:23:56,089 - INFO - ==================================================
+2025-06-03 17:56:30,709 - ERROR - Dependencias faltantes: python-dotenv
+2025-06-03 17:56:30,711 - INFO - Instala con: pip install python-dotenv
+2025-06-03 17:56:30,716 - INFO - 
+==================================================
+2025-06-03 17:56:30,720 - INFO - ==================================================
+2025-06-03 17:56:43,843 - ERROR - Dependencias faltantes: python-dotenv
+2025-06-03 17:56:43,843 - INFO - Instala con: pip install python-dotenv
+2025-06-03 17:56:43,845 - INFO - 
+==================================================
+2025-06-03 17:56:43,848 - INFO - ==================================================
+2025-06-03 17:58:21,720 - ERROR - Dependencias faltantes: python-dotenv
+2025-06-03 17:58:21,720 - INFO - Instala con: pip install python-dotenv
+2025-06-03 17:58:21,723 - INFO - 
+==================================================
+2025-06-03 17:58:21,725 - INFO - ==================================================
+2025-06-03 17:58:50,241 - INFO - INICIANDO PRUEBAS DEL SISTEMA
+2025-06-03 17:58:50,241 - INFO - ==================================================
+2025-06-03 17:58:50,241 - INFO - 
+Ejecutando: Verificar dependencias
+2025-06-03 17:58:50,241 - INFO - ------------------------------
+2025-06-03 17:58:50,479 - INFO - OK - telegram
+2025-06-03 17:58:50,785 - INFO - OK - openai
+2025-06-03 17:58:50,878 - INFO - OK - flask
+2025-06-03 17:58:51,144 - INFO - OK - flask_sqlalchemy
+2025-06-03 17:58:51,145 - ERROR - FALTA - python_dotenv
+2025-06-03 17:58:51,209 - INFO - OK - requests
+2025-06-03 17:58:51,209 - ERROR - Dependencias faltantes: python_dotenv
+2025-06-03 17:58:51,209 - INFO - Instala con: pip install python_dotenv
+2025-06-03 17:58:51,209 - ERROR - FALLIDO - Verificar dependencias
+2025-06-03 17:58:51,209 - INFO - 
+Ejecutando: Verificar variables de entorno
+2025-06-03 17:58:51,209 - INFO - ------------------------------
+2025-06-03 17:58:51,211 - INFO - OK - TELEGRAM_BOT_TOKEN
+2025-06-03 17:58:51,211 - INFO - OK - OPENAI_API_KEY
+2025-06-03 17:58:51,211 - INFO - Variables de entorno configuradas correctamente
+2025-06-03 17:58:51,211 - INFO - EXITOSO - Verificar variables de entorno
+2025-06-03 17:58:51,211 - INFO - 
+Ejecutando: Probar Flask app
+2025-06-03 17:58:51,211 - INFO - ------------------------------
+2025-06-03 17:58:52,431 - INFO - Flask app creada correctamente
+2025-06-03 17:58:52,432 - INFO - Base de datos inicializada
+2025-06-03 17:58:52,433 - INFO - EXITOSO - Probar Flask app
+2025-06-03 17:58:52,433 - INFO - 
+Ejecutando: Probar OpenAI
+2025-06-03 17:58:52,433 - INFO - ------------------------------
+2025-06-03 17:58:53,646 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 17:58:53,646 - INFO - Retrying request to /chat/completions in 0.868715 seconds
+2025-06-03 17:58:54,653 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 17:58:54,654 - INFO - Retrying request to /chat/completions in 1.648807 seconds
+2025-06-03 17:58:56,438 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 17:58:56,438 - ERROR - Error con OpenAI: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+2025-06-03 17:58:56,439 - ERROR - FALLIDO - Probar OpenAI
+2025-06-03 17:58:56,439 - INFO - 
+Ejecutando: Probar bot de Telegram
+2025-06-03 17:58:56,439 - INFO - ------------------------------
+2025-06-03 17:58:57,456 - INFO - HTTP Request: POST https://api.telegram.org/bot7216782797:AAFWtDCq8ZGzxrvjpcjeG57MwBOc_Vt8pZ8/getMe "HTTP/1.1 200 OK"
+2025-06-03 17:58:57,457 - INFO - Bot conectado: @lavanderia_digital_bot
+2025-06-03 17:58:57,457 - INFO - Nombre: lavanderia_digital
+2025-06-03 17:58:57,457 - INFO - ID: 7216782797
+2025-06-03 17:58:57,457 - INFO - EXITOSO - Probar bot de Telegram
+2025-06-03 17:58:57,458 - INFO - 
+==================================================
+2025-06-03 17:58:57,458 - INFO - RESUMEN DE PRUEBAS
+2025-06-03 17:58:57,458 - INFO - ==================================================
+2025-06-03 17:58:57,458 - INFO - FALLIDO    - Verificar dependencias
+2025-06-03 17:58:57,458 - INFO - EXITOSO    - Verificar variables de entorno
+2025-06-03 17:58:57,459 - INFO - EXITOSO    - Probar Flask app
+2025-06-03 17:58:57,459 - INFO - FALLIDO    - Probar OpenAI
+2025-06-03 17:58:57,459 - INFO - EXITOSO    - Probar bot de Telegram
+2025-06-03 17:58:57,459 - INFO - 
+Resultado: 3/5 pruebas exitosas
+2025-06-03 17:58:57,459 - ERROR - Hay errores que corregir.
+2025-06-03 18:05:54,580 - INFO - INICIANDO PRUEBAS DEL SISTEMA
+2025-06-03 18:05:54,581 - INFO - ==================================================
+2025-06-03 18:05:54,581 - INFO - 
+Ejecutando: Verificar dependencias
+2025-06-03 18:05:54,581 - INFO - ------------------------------
+2025-06-03 18:05:54,916 - INFO - OK - telegram
+2025-06-03 18:05:55,338 - INFO - OK - openai
+2025-06-03 18:05:55,475 - INFO - OK - flask
+2025-06-03 18:05:55,798 - INFO - OK - flask_sqlalchemy
+2025-06-03 18:05:55,799 - ERROR - FALTA - python_dotenv
+2025-06-03 18:05:55,878 - INFO - OK - requests
+2025-06-03 18:05:55,878 - ERROR - Dependencias faltantes: python_dotenv
+2025-06-03 18:05:55,879 - INFO - Instala con: pip install python_dotenv
+2025-06-03 18:05:55,879 - ERROR - FALLIDO - Verificar dependencias
+2025-06-03 18:05:55,879 - INFO - 
+Ejecutando: Verificar variables de entorno
+2025-06-03 18:05:55,879 - INFO - ------------------------------
+2025-06-03 18:05:55,879 - INFO - OK - TELEGRAM_BOT_TOKEN
+2025-06-03 18:05:55,879 - INFO - OK - OPENAI_API_KEY
+2025-06-03 18:05:55,879 - INFO - Variables de entorno configuradas correctamente
+2025-06-03 18:05:55,879 - INFO - EXITOSO - Verificar variables de entorno
+2025-06-03 18:05:55,881 - INFO - 
+Ejecutando: Probar Flask app
+2025-06-03 18:05:55,881 - INFO - ------------------------------
+2025-06-03 18:05:56,937 - INFO - Flask app creada correctamente
+2025-06-03 18:05:56,938 - INFO - Base de datos inicializada
+2025-06-03 18:05:56,939 - INFO - EXITOSO - Probar Flask app
+2025-06-03 18:05:56,939 - INFO - 
+Ejecutando: Probar OpenAI
+2025-06-03 18:05:56,939 - INFO - ------------------------------
+2025-06-03 18:05:57,487 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 18:05:57,488 - INFO - Retrying request to /chat/completions in 0.759254 seconds
+2025-06-03 18:05:58,348 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 18:05:58,349 - INFO - Retrying request to /chat/completions in 1.880013 seconds
+2025-06-03 18:06:00,745 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-06-03 18:06:00,745 - ERROR - Error con OpenAI: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+2025-06-03 18:06:00,746 - ERROR - FALLIDO - Probar OpenAI
+2025-06-03 18:06:00,746 - INFO - 
+Ejecutando: Probar bot de Telegram
+2025-06-03 18:06:00,746 - INFO - ------------------------------
+2025-06-03 18:06:01,762 - INFO - HTTP Request: POST https://api.telegram.org/bot7216782797:AAFWtDCq8ZGzxrvjpcjeG57MwBOc_Vt8pZ8/getMe "HTTP/1.1 200 OK"
+2025-06-03 18:06:01,763 - INFO - Bot conectado: @lavanderia_digital_bot
+2025-06-03 18:06:01,763 - INFO - Nombre: lavanderia_digital
+2025-06-03 18:06:01,763 - INFO - ID: 7216782797
+2025-06-03 18:06:01,764 - INFO - EXITOSO - Probar bot de Telegram
+2025-06-03 18:06:01,764 - INFO - 
+==================================================
+2025-06-03 18:06:01,764 - INFO - RESUMEN DE PRUEBAS
+2025-06-03 18:06:01,764 - INFO - ==================================================
+2025-06-03 18:06:01,764 - INFO - FALLIDO    - Verificar dependencias
+2025-06-03 18:06:01,764 - INFO - EXITOSO    - Verificar variables de entorno
+2025-06-03 18:06:01,764 - INFO - EXITOSO    - Probar Flask app
+2025-06-03 18:06:01,765 - INFO - FALLIDO    - Probar OpenAI
+2025-06-03 18:06:01,765 - INFO - EXITOSO    - Probar bot de Telegram
+2025-06-03 18:06:01,765 - INFO - 
+Resultado: 3/5 pruebas exitosas
+2025-06-03 18:06:01,765 - ERROR - Hay errores que corregir.
