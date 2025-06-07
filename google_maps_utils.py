@@ -247,67 +247,6 @@ class GoogleMapsIntegration:
             'tiempo_viaje': round(tiempo_viaje)
         }
 
-# Función para actualizar el sistema de envío de rutas existente
-def enviar_ruta_con_mapas_telegram(repartidor_chat_id: str, ruta_data: Dict, repartidor_nombre: str = "Repartidor") -> bool:
-    """
-    Función mejorada para enviar rutas con integración completa de Google Maps
-    Esta función reemplaza la función anterior en admin_routes.py
-    """
-    try:
-        from bot_completo import send_message
-        
-        # Generar mensaje con enlaces de Google Maps
-        mensaje = GoogleMapsIntegration.generar_mensaje_telegram_con_mapas(ruta_data, repartidor_nombre)
-        
-        # Generar estimaciones de tiempo
-        todos_pedidos = []
-        for zona_data in ruta_data.get('rutas', {}).values():
-            todos_pedidos.extend(zona_data['pedidos'])
-        
-        estimacion = GoogleMapsIntegration.generar_estimacion_tiempo(todos_pedidos)
-        
-        # Agregar información de estimación
-        mensaje += f"""
-📊 *ESTIMACIONES:*
-⏱️ Tiempo total: {estimacion['tiempo_total']} minutos
-🛣️ Distancia: {estimacion['distancia_total']} km
-🚏 Paradas: {estimacion['paradas']}
-⚡ Tiempo por parada: {estimacion['tiempo_paradas']} min
-🚗 Tiempo de viaje: {estimacion['tiempo_viaje']} min
-"""
-        
-        # Enviar mensaje principal
-        result = send_message(repartidor_chat_id, mensaje, parse_mode=None)
-        
-        if result and result.get('ok'):
-            print(f"✅ Ruta con Google Maps enviada a {repartidor_chat_id}")
-            
-            # Enviar mensajes adicionales para cada zona
-            zona_num = 1
-            for zona, zona_data in ruta_data.get('rutas', {}).items():
-                pedidos = zona_data['pedidos']
-                if len(pedidos) > 3:  # Solo para zonas grandes
-                    url_zona = GoogleMapsIntegration.generar_ruta_completa(pedidos)
-                    mensaje_zona = f"""🗺️ *ZONA {zona_num}: {zona}*
-
-🛣️ [Navegar Zona Completa]({url_zona})
-
-Esta ruta optimizada te llevará por todas las {len(pedidos)} paradas de esta zona en el orden más eficiente.
-
-⚡ Tiempo estimado: {GoogleMapsIntegration.generar_estimacion_tiempo(pedidos)['tiempo_total']} min
-"""
-                    send_message(repartidor_chat_id, mensaje_zona)
-                    zona_num += 1
-            
-            return True
-        else:
-            print(f"❌ Error enviando ruta: {result}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Error enviando ruta con mapas: {e}")
-        return False
-
 # Función para uso desde el panel admin
 def obtener_info_google_maps_para_admin(pedidos: List[Dict]) -> Dict:
     """Generar información de Google Maps para mostrar en el panel admin"""

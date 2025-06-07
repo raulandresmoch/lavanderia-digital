@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 from datetime import datetime, date, timedelta
 from app.models import db, Pedido, Usuario, Admin
 from app.extensions import db
+from app.bot_repartidor_completo import obtener_repartidores_disponibles, enviar_ruta_a_repartidor, BotRepartidor
 import requests
 import os
 from google_maps_utils import GoogleMapsIntegration, enviar_ruta_con_mapas_telegram
@@ -242,7 +243,7 @@ def enviar_ruta_telegram():
         data = request.get_json()
         repartidor_chat_id = data.get('repartidor_chat_id')
         ruta_data = data.get('ruta_data')
-        ruta_id = data.get('ruta_id', f"RUTA_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        # ruta_id = data.get('ruta_id', f"RUTA_{datetime.now().strftime('%Y%m%d_%H%M%S')}") # ruta_id no se usa más aquí
         
         if not repartidor_chat_id or not ruta_data:
             return jsonify({
@@ -250,48 +251,27 @@ def enviar_ruta_telegram():
                 'error': 'Faltan parámetros requeridos'
             }), 400
         
-        # Obtener información del repartidor (simulado por ahora)
-        repartidor_nombre = f"Repartidor_{repartidor_chat_id[-4:]}"
-        
-        # Preparar datos para el envío con Google Maps
-        ruta_para_envio = {
-            'tipo': ruta_data.get('tipo', 'recoleccion'),
-            'fecha': ruta_data.get('fecha', datetime.now().strftime('%Y-%m-%d')),
-            'rutas': {},
-            'total_pedidos': ruta_data.get('total_pedidos', 0),
-            'admin_chat_id': os.getenv('TELEGRAM_ADMIN_CHATS', 'Admin')
-        }
-        
-        # Convertir formato de rutas para Google Maps
-        for zona, pedidos in ruta_data.get('rutas', {}).items():
-            ruta_para_envio['rutas'][zona] = pedidos
-        
-        print(f"🔍 DEBUG ruta_data type: {type(ruta_data)}")
-        print(f"🔍 DEBUG ruta_data keys: {ruta_data.keys() if hasattr(ruta_data, 'keys') else 'No keys'}")
-        print(f"🔍 DEBUG ruta_data: {ruta_data}")
+        # Obtener información del repartidor (simulado por ahora, idealmente de la DB de repartidores)
+        repartidor_nombre = f"Repartidor_{repartidor_chat_id[-4:]}" # Podría obtenerse de repartidores.db si estuviera sincronizado
 
-        # Enviar ruta con integración de Google Maps
-        resultado = enviar_ruta_con_mapas_telegram(
-            repartidor_chat_id, 
-            ruta_data, 
-            repartidor_nombre
-        )
-        
-        if resultado:
-            # Registrar envío en base de datos (opcional)
-            # TODO: Crear tabla para registrar envíos de rutas
+        # Intentar asignar la ruta y enviar notificación inicial
+        exito_asignacion = enviar_ruta_a_repartidor(repartidor_chat_id, ruta_data)
+
+        if exito_asignacion:
+            # Si la asignación fue exitosa, enviar el mensaje detallado con mapas
+            mensaje_mapas = GoogleMapsIntegration.generar_mensaje_telegram_con_mapas(ruta_data, repartidor_nombre)
+
+            bot = BotRepartidor()
+            bot.send_message(repartidor_chat_id, mensaje_mapas, parse_mode='Markdown')
             
             return jsonify({
                 'success': True,
-                'mensaje': f'Ruta enviada exitosamente a {repartidor_nombre}',
-                'ruta_id': ruta_id,
-                'repartidor_chat_id': repartidor_chat_id,
-                'total_pedidos': ruta_para_envio['total_pedidos']
+                'mensaje': f'Ruta enviada y asignada exitosamente a {repartidor_nombre}'
             })
         else:
             return jsonify({
                 'success': False,
-                'error': 'Error enviando mensaje por Telegram'
+                'error': 'Error asignando la ruta en la base de datos del repartidor.'
             }), 500
             
     except Exception as e:
@@ -309,32 +289,11 @@ def enviar_ruta_telegram():
 def repartidores_disponibles():
     """Obtener lista de repartidores disponibles"""
     try:
-        # Por ahora simulamos repartidores
-        # En producción esto vendría de una tabla de repartidores
-        repartidores_simulados = [
-            {
-                'chat_id': os.getenv('TELEGRAM_ADMIN_CHATS', '123456789'),
-                'nombre': 'Repartidor Test',
-                'activo': True,
-                'estado': 'disponible'
-            },
-            {
-                'chat_id': '987654321',
-                'nombre': 'Juan Pérez',
-                'activo': True,
-                'estado': 'disponible'
-            },
-            {
-                'chat_id': '456789123',
-                'nombre': 'María García',
-                'activo': False,
-                'estado': 'desconectado'
-            }
-        ]
+        repartidores = obtener_repartidores_disponibles()
         
         return jsonify({
             'success': True,
-            'repartidores': repartidores_simulados
+            'repartidores': repartidores
         })
         
     except Exception as e:
