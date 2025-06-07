@@ -127,7 +127,7 @@ def mis_direcciones():
         return redirect(url_for("main.login"))
     
     usuario = Usuario.query.get(session["usuario_id"])
-    direcciones = usuario.direcciones_activas
+    direcciones = usuario.direcciones
     
     return render_template("mis_direcciones.html", direcciones=direcciones, usuario=usuario)
 
@@ -324,7 +324,7 @@ def cotizar():
     
     usuario = Usuario.query.get(session["usuario_id"])
     tipos_prenda = TipoPrenda.query.filter_by(activo=True).all()
-    direcciones = usuario.direcciones_activas
+    direcciones = usuario.direcciones
     
     return render_template("cotizar.html", 
                          tipos_prenda=tipos_prenda, 
