@@ -71,7 +71,7 @@
                         <input type="date" 
                                class="form-control" 
                                id="fechaSelector" 
-                               value="{{ fecha_str }}"
+                               value="{{ fecha_str or '' }}"
                                onchange="cambiarFecha()">
                     </div>
                 </div>
@@ -264,142 +264,422 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        function cambiarFecha() {
-            const fecha = document.getElementById('fechaSelector').value;
-            window.location.href = `{{ url_for('admin.rutas') }}?fecha=${fecha}`;
-        }
+<script>
+// Reemplazar TODO el JavaScript en templates/admin/rutas.html
 
-        function generarRuta(tipo) {
-            const fecha = document.getElementById('fechaSelector').value;
-            
-            // Mostrar modal de carga
-            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-            loadingModal.show();
-            
-            fetch('/admin/api/generar-ruta-optimizada', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    fecha: fecha,
-                    tipo: tipo
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                loadingModal.hide();
-                
-                if (data.success) {
-                    mostrarRutasGeneradas(data.rutas, tipo, data.total_pedidos);
-                    
-                    // Actualizar contador
-                    const totalRutas = Object.keys(data.rutas).length;
-                    document.getElementById('rutasGeneradas').textContent = totalRutas;
-                    
-                    // Mostrar notificación
-                    mostrarNotificacion(`Ruta de ${tipo} generada exitosamente: ${totalRutas} zonas`, 'success');
-                } else {
-                    mostrarNotificacion('Error generando ruta: ' + (data.error || 'Error desconocido'), 'danger');
+let loadingModalInstance = null; // Variable global para el modal
+let rutaActual = null; // Variable global para la ruta actual
+
+function generarRuta(tipo) {
+    const fecha = document.getElementById('fechaSelector').value;
+    
+    if (!fecha) {
+        mostrarNotificacion('Por favor selecciona una fecha válida', 'warning');
+        return;
+    }
+    
+    console.log(`Generando ruta: tipo=${tipo}, fecha=${fecha}`);
+    
+    // Crear y mostrar modal manualmente
+    const loadingModalElement = document.getElementById('loadingModal');
+    
+    // Limpiar cualquier modal anterior
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    // Crear nueva instancia del modal
+    loadingModalInstance = new bootstrap.Modal(loadingModalElement, {
+        backdrop: 'static',
+        keyboard: false
+    });
+    
+    loadingModalInstance.show();
+    
+    // Función para cerrar modal de forma agresiva
+    function cerrarModalAgresivo() {
+        try {
+            if (loadingModalInstance) {
+                loadingModalInstance.hide();
+                loadingModalInstance.dispose();
+                loadingModalInstance = null;
+            }
+        } catch (e) {
+            console.log('Error cerrando modal método 1:', e);
+        }
+        
+        setTimeout(() => {
+            try {
+                const modal = document.getElementById('loadingModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('show');
+                    modal.setAttribute('aria-hidden', 'true');
+                    modal.removeAttribute('aria-modal');
+                    modal.removeAttribute('role');
                 }
-            })
-            .catch(error => {
-                loadingModal.hide();
-                console.error('Error:', error);
-                mostrarNotificacion('Error de conexión', 'danger');
-            });
-        }
-
-        function mostrarRutasGeneradas(rutas, tipo, totalPedidos) {
-            const container = document.getElementById('rutasGeneradasContainer');
-            const content = document.getElementById('rutasContent');
-            
-            let html = `
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Ruta de ${tipo} generada:</strong> ${Object.keys(rutas).length} zonas con ${totalPedidos} pedidos
-                </div>
-            `;
-            
-            let zonaIndex = 1;
-            for (const [zona, pedidos] of Object.entries(rutas)) {
-                html += `
-                    <div class="card mb-3">
-                        <div class="card-header zona-header">
-                            <h6 class="mb-0">
-                                <i class="fas fa-map-marker-alt me-2"></i>
-                                Zona ${zonaIndex}: ${zona} (${pedidos.length} paradas)
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                `;
                 
-                pedidos.forEach((pedido, index) => {
-                    html += `
-                        <div class="col-md-6 mb-2">
-                            <div class="d-flex align-items-center">
-                                <span class="badge bg-primary me-2">${index + 1}</span>
-                                <div class="flex-grow-1">
-                                    <strong>Pedido #${pedido.id}</strong> - ${pedido.cliente}<br>
-                                    <small class="text-muted">${pedido.direccion}</small><br>
-                                    <small class="text-info">📱 ${pedido.telefono}</small>
-                                    ${pedido.notas ? `<br><small class="text-warning">📝 ${pedido.notas}</small>` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    `;
+                document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+                    backdrop.remove();
                 });
                 
-                html += `
-                            </div>
-                            <div class="mt-3">
-                                <button class="btn btn-success btn-sm me-2">
-                                    <i class="fas fa-paper-plane me-1"></i>Enviar a Repartidor
-                                </button>
-                                <button class="btn btn-outline-primary btn-sm" onclick="verEnMapa('${zona}')">
-                                    <i class="fas fa-map me-1"></i>Ver en Mapa
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                zonaIndex++;
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                
+                console.log('✅ Modal cerrado forzadamente');
+            } catch (e) {
+                console.log('Error método 2:', e);
+            }
+        }, 100);
+    }
+    
+    fetch('/admin/api/generar-ruta-optimizada', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            fecha: fecha,
+            tipo: tipo
+        })
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        cerrarModalAgresivo();
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error(`Respuesta no válida (${response.status}): ${response.statusText}`);
+        }
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('Datos recibidos:', data);
+        
+        if (data.success) {
+            if (data.total_pedidos === 0) {
+                mostrarNotificacion(`No hay pedidos de ${tipo} para esta fecha`, 'info');
+                return;
             }
             
-            content.innerHTML = html;
-            container.style.display = 'block';
+            // CAMBIO PRINCIPAL: Llamar a mostrarRutasConRepartidores en lugar de mostrarRutasGeneradas
+            mostrarRutasConRepartidores(data.rutas, tipo, data.total_pedidos, fecha);
             
-            // Scroll suave hacia las rutas
-            container.scrollIntoView({ behavior: 'smooth' });
+            const totalRutas = Object.keys(data.rutas).length;
+            document.getElementById('rutasGeneradas').textContent = totalRutas;
+            
+            mostrarNotificacion(`Ruta de ${tipo} generada: ${totalRutas} zonas con ${data.total_pedidos} pedidos`, 'success');
+        } else {
+            mostrarNotificacion('Error generando ruta: ' + (data.error || 'Error desconocido'), 'danger');
         }
-
-        function verEnMapa(zona) {
-            // Aquí podrías integrar con Google Maps o Leaflet
-            mostrarNotificacion(`Función de mapa para zona "${zona}" en desarrollo`, 'info');
+    })
+    .catch(error => {
+        cerrarModalAgresivo();
+        console.error('Error completo:', error);
+        
+        let mensajeError = 'Error de conexión';
+        if (error.message.includes('500')) {
+            mensajeError = 'Error interno del servidor. Revisa los logs.';
+        } else if (error.message.includes('404')) {
+            mensajeError = 'Endpoint no encontrado';
+        } else if (error.message.includes('Failed to fetch')) {
+            mensajeError = 'Error de red. Verifica la conexión.';
+        } else {
+            mensajeError = error.message;
         }
+        
+        mostrarNotificacion(mensajeError, 'danger');
+    });
+}
 
-        function mostrarNotificacion(mensaje, tipo) {
-            // Crear notificación bootstrap
-            const alertHTML = `
-                <div class="alert alert-${tipo} alert-dismissible fade show position-fixed" 
-                     style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;" role="alert">
-                    ${mensaje}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+function mostrarRutasConRepartidores(rutas, tipo, totalPedidos, fecha) {
+    const container = document.getElementById('rutasGeneradasContainer');
+    const content = document.getElementById('rutasContent');
+    
+    // Guardar datos para envío
+    rutaActual = {
+        rutas: rutas,
+        tipo: tipo,
+        total_pedidos: totalPedidos,
+        fecha: fecha
+    };
+    
+    let html = `
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Ruta de ${tipo} generada:</strong> ${Object.keys(rutas).length} zonas con ${totalPedidos} pedidos
+        </div>
+    `;
+    
+    let zonaIndex = 1;
+    for (const [zona, zonaData] of Object.entries(rutas)) {
+        const pedidos = zonaData.pedidos;
+        html += `
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Zona ${zonaIndex}: ${zona} (${pedidos.length} paradas)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+        `;
+        
+        pedidos.forEach((pedido, index) => {
+            html += `
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-primary me-2">${index + 1}</span>
+                        <div class="flex-grow-1">
+                            <strong>Pedido #${pedido.id}</strong> - ${pedido.cliente}<br>
+                            <small class="text-muted">${pedido.direccion}</small><br>
+                            <small class="text-info">📱 ${pedido.telefono}</small>
+                            ${pedido.notas ? `<br><small class="text-warning">📝 ${pedido.notas}</small>` : ''}
+                        </div>
+                    </div>
                 </div>
             `;
-            
-            document.body.insertAdjacentHTML('beforeend', alertHTML);
-            
-            // Auto-remove después de 4 segundos
-            setTimeout(() => {
-                const alerts = document.querySelectorAll('.alert');
-                if (alerts.length > 0) {
-                    alerts[alerts.length - 1].remove();
-                }
-            }, 4000);
+        });
+        
+        html += `
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-success btn-sm me-2">
+                            <i class="fas fa-paper-plane me-1"></i>Enviar a Repartidor
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="verEnMapa('${zona}')">
+                            <i class="fas fa-map me-1"></i>Ver en Mapa
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        zonaIndex++;
+    }
+    
+    // AGREGAR SECCIÓN DE REPARTIDORES
+    html += `
+        <div class="card mt-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0">
+                    <i class="fab fa-telegram me-2"></i>
+                    Enviar Ruta Completa por Telegram
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <label class="form-label">Seleccionar Repartidor:</label>
+                        <select class="form-select" id="repartidorSelector">
+                            <option value="">Cargando repartidores...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-success w-100" id="btnEnviarTelegram" onclick="enviarRutaPorTelegram()">
+                            <i class="fab fa-telegram me-2"></i>Enviar por Telegram
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        La ruta completa se enviará al repartidor seleccionado con todos los detalles, direcciones y contactos.
+                    </small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+    container.style.display = 'block';
+    
+    // Cargar repartidores disponibles
+    cargarRepartidores();
+    
+    // Scroll suave hacia las rutas
+    container.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cargarRepartidores() {
+    fetch('/admin/api/repartidores-disponibles', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
         }
-    </script>
+    })
+    .then(response => response.json())
+    .then(data => {
+        const selector = document.getElementById('repartidorSelector');
+        if (!selector) return;
+        
+        if (data.success) {
+            selector.innerHTML = '<option value="">Seleccionar repartidor...</option>';
+            
+            data.repartidores.forEach(repartidor => {
+                if (repartidor.activo) {
+                    const option = document.createElement('option');
+                    option.value = repartidor.chat_id;
+                    option.textContent = `${repartidor.nombre} (${repartidor.chat_id})`;
+                    selector.appendChild(option);
+                }
+            });
+        } else {
+            selector.innerHTML = '<option value="">Error cargando repartidores</option>';
+        }
+    })
+    .catch(error => {
+        console.error('Error cargando repartidores:', error);
+        const selector = document.getElementById('repartidorSelector');
+        if (selector) {
+            selector.innerHTML = '<option value="">Error de conexión</option>';
+        }
+    });
+}
+
+function enviarRutaPorTelegram() {
+    const repartidorSelector = document.getElementById('repartidorSelector');
+    const chatId = repartidorSelector.value;
+    
+    if (!chatId) {
+        mostrarNotificacion('Por favor selecciona un repartidor', 'warning');
+        return;
+    }
+    
+    if (!rutaActual) {
+        mostrarNotificacion('No hay ruta generada para enviar', 'danger');
+        return;
+    }
+    
+    const botonEnviar = document.getElementById('btnEnviarTelegram');
+    const textoOriginal = botonEnviar.innerHTML;
+    
+    // Mostrar loading
+    botonEnviar.disabled = true;
+    botonEnviar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Enviando...';
+    
+    const payload = {
+        repartidor_chat_id: chatId,
+        ruta_data: rutaActual,
+        ruta_id: `${rutaActual.tipo.toUpperCase()}_${rutaActual.fecha}_${Date.now()}`
+    };
+    
+    console.log('Enviando payload:', payload);
+    
+    fetch('/admin/api/enviar-ruta-telegram', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Restaurar botón
+        botonEnviar.disabled = false;
+        botonEnviar.innerHTML = textoOriginal;
+        
+        if (data.success) {
+            mostrarNotificacion('🚀 ¡Ruta enviada exitosamente por Telegram!', 'success');
+            
+            // Cambiar estado del botón
+            botonEnviar.innerHTML = '<i class="fas fa-check me-2"></i>Enviado ✅';
+            botonEnviar.classList.remove('btn-success');
+            botonEnviar.classList.add('btn-outline-success');
+            botonEnviar.disabled = true;
+        } else {
+            mostrarNotificacion('Error: ' + (data.error || 'No se pudo enviar'), 'danger');
+        }
+    })
+    .catch(error => {
+        // Restaurar botón
+        botonEnviar.disabled = false;
+        botonEnviar.innerHTML = textoOriginal;
+        
+        console.error('Error:', error);
+        mostrarNotificacion('Error enviando ruta por Telegram', 'danger');
+    });
+}
+
+function cambiarFecha() {
+    const fecha = document.getElementById('fechaSelector').value;
+    if (fecha) {
+        window.location.href = `{{ url_for('admin.rutas') }}?fecha=${fecha}`;
+    }
+}
+
+function verEnMapa(zona) {
+    mostrarNotificacion(`Función de mapa para zona "${zona}" en desarrollo`, 'info');
+}
+
+function mostrarNotificacion(mensaje, tipo) {
+    const alertHTML = `
+        <div class="alert alert-${tipo} alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;" role="alert">
+            ${mensaje}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', alertHTML);
+    
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        if (alerts.length > 0) {
+            alerts[alerts.length - 1].remove();
+        }
+    }, 4000);
+}
+
+// Función adicional para cerrar modal si se queda colgado
+function forzarCerrarModal() {
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    });
+    
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+    });
+    
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    console.log('🔧 Modal cerrado forzadamente');
+}
+
+// Event listener adicional para cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        forzarCerrarModal();
+    }
+});
+
+// Inicialización del selector de fecha
+document.addEventListener('DOMContentLoaded', function() {
+    const fechaSelector = document.getElementById('fechaSelector');
+    
+    // Si no hay fecha seleccionada, usar hoy
+    if (!fechaSelector.value) {
+        const hoy = new Date();
+        const fechaStr = hoy.toISOString().split('T')[0];
+        fechaSelector.value = fechaStr;
+    }
+    
+    console.log('Fecha inicial:', fechaSelector.value);
+});
+</script>
+
 </body>
 </html>

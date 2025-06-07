@@ -1,15 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, Usuario, DireccionUsuario, TipoPrenda, Pedido, ItemPedido, Configuracion
+from app.models import db, Usuario, DireccionUsuario, TipoPrenda, Pedido, PedidoItem, Configuracion
 from datetime import datetime, timedelta
 import json
 from datetime import datetime, date, timedelta
-import asyncio
 import os
-from flask import jsonify, request, render_template, flash, redirect, url_for
-from app.telegram_service import telegram_service
-from app.email_service import email_service
-from app.rutas_service import rutas_service, inicializar_rutas_service
 import logging
 
 # Configurar logger
@@ -282,6 +277,7 @@ def eliminar_direccion(direccion_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 @main.route("/marcar-principal/<int:direccion_id>", methods=["POST"])
 def marcar_principal(direccion_id):
     if "usuario_id" not in session:
@@ -402,7 +398,7 @@ def calcular_cotizacion():
         
     except Exception as e:
         # Log del error para debugging
-        print(f"Error en calcular_cotizacion: {str(e)}")
+        logger.error(f"Error en calcular_cotizacion: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -540,417 +536,7 @@ def fechas_disponibles():
         return jsonify({"fechas": fechas})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
 
-@main.route("/admin/telegram", methods=["GET", "POST"])
-def admin_telegram():
-    """Panel de administración de Telegram"""
-    if "admin_id" not in session:  # Ajusta según tu sistema de auth admin
-        return redirect(url_for("admin.login"))
-    
-    if request.method == "POST":
-        action = request.form.get("action")
-        
-        if action == "init_bot":
-            # Inicializar bot de Telegram
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                success = loop.run_until_complete(telegram_service.inicializar_bot())
-                
-                if success:
-                    flash("Bot de Telegram inicializado correctamente", "success")
-                else:
-                    flash("Error inicializando el bot de Telegram", "error")
-            except Exception as e:
-                flash(f"Error: {str(e)}", "error")
-        
-        elif action == "send_test":
-            # Enviar mensaje de prueba
-            chat_id = request.form.get("test_chat_id")
-            mensaje = request.form.get("test_message")
-            
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(
-                    telegram_service.bot.send_message(
-                        chat_id=chat_id,
-                        text=mensaje,
-                        parse_mode='Markdown'
-                    )
-                )
-                flash("Mensaje de prueba enviado correctamente", "success")
-            except Exception as e:
-                flash(f"Error enviando mensaje: {str(e)}", "error")
-    
-    # Obtener configuración actual
-    config = {
-        'bot_token': os.getenv('TELEGRAM_BOT_TOKEN', 'No configurado'),
-        'admin_chats': os.getenv('TELEGRAM_ADMIN_CHATS', 'No configurado'),
-        'openai_key': 'Configurado' if os.getenv('OPENAI_API_KEY') else 'No configurado'
-    }
-    
-    return render_template("admin/telegram.html", config=config)
-
-@main.route("/admin/rutas")
-def admin_rutas():
-    """Panel de administración de rutas"""
-    if "admin_id" not in session:
-        return redirect(url_for("admin.login"))
-    
-    # Obtener rutas del día actual
-    try:
-        fecha_hoy = date.today()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        if not rutas_service:
-            inicializar_rutas_service(db.session, telegram_service, email_service)
-        
-        rutas_hoy = loop.run_until_complete(rutas_service.obtener_rutas_del_dia(fecha_hoy))
-        
-        # Obtener estadísticas de la semana
-        fecha_inicio = fecha_hoy - timedelta(days=6)
-        estadisticas = loop.run_until_complete(
-            rutas_service.obtener_estadisticas_rutas(fecha_inicio, fecha_hoy)
-        )
-        
-    except Exception as e:
-        flash(f"Error cargando rutas: {str(e)}", "error")
-        rutas_hoy = []
-        estadisticas = {}
-    
-    return render_template("admin/rutas.html", 
-                         rutas=rutas_hoy, 
-                         estadisticas=estadisticas,
-                         fecha=fecha_hoy)
-
-@main.route("/admin/generar-rutas", methods=["POST"])
-def admin_generar_rutas():
-    """Generar rutas para un día específico"""
-    if "admin_id" not in session:
-        return jsonify({"error": "No autorizado"}), 401
-    
-    try:
-        fecha_str = request.form.get("fecha")
-        fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date() if fecha_str else date.today()
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        if not rutas_service:
-            inicializar_rutas_service(db.session, telegram_service, email_service)
-        
-        rutas_generadas = loop.run_until_complete(rutas_service.generar_rutas_del_dia(fecha))
-        
-        return jsonify({
-            "success": True,
-            "mensaje": f"Se generaron {len(rutas_generadas)} rutas para {fecha.strftime('%d/%m/%Y')}",
-            "rutas_generadas": len(rutas_generadas)
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@main.route("/admin/asignar-ruta", methods=["POST"])
-def admin_asignar_ruta():
-    """Asignar ruta a un repartidor"""
-    if "admin_id" not in session:
-        return jsonify({"error": "No autorizado"}), 401
-    
-    try:
-        data = request.get_json()
-        ruta_id = data.get("ruta_id")
-        repartidor_chat_id = data.get("repartidor_chat_id")
-        
-        if not ruta_id or not repartidor_chat_id:
-            return jsonify({"error": "Faltan datos requeridos"}), 400
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        success = loop.run_until_complete(
-            rutas_service.asignar_ruta_repartidor(ruta_id, repartidor_chat_id)
-        )
-        
-        if success:
-            return jsonify({
-                "success": True,
-                "mensaje": f"Ruta {ruta_id} asignada correctamente"
-            })
-        else:
-            return jsonify({"error": "Error asignando ruta"}), 500
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# === WEBHOOK DE TELEGRAM ===
-
-@main.route("/telegram-webhook", methods=["POST"])
-def telegram_webhook():
-    """Webhook para recibir actualizaciones de Telegram"""
-    try:
-        data = request.get_json()
-        
-        # Procesar la actualización de forma asíncrona
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Crear objeto Update de telegram
-        from telegram import Update
-        update = Update.de_json(data, telegram_service.bot)
-        
-        # Procesar con el bot
-        if telegram_service.application:
-            loop.run_until_complete(telegram_service.application.process_update(update))
-        
-        return jsonify({"status": "ok"})
-        
-    except Exception as e:
-        logger.error(f"Error en webhook de Telegram: {e}")
-        return jsonify({"error": str(e)}), 500
-
-# === APIs PARA RUTAS Y TRACKING ===
-
-@main.route("/api/rutas/<fecha>")
-def api_rutas_fecha(fecha):
-    """API para obtener rutas de una fecha específica"""
-    try:
-        fecha_obj = datetime.strptime(fecha, "%Y-%m-%d").date()
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        if not rutas_service:
-            inicializar_rutas_service(db.session, telegram_service, email_service)
-        
-        rutas = loop.run_until_complete(rutas_service.obtener_rutas_del_dia(fecha_obj))
-        
-        # Serializar rutas para JSON
-        rutas_json = []
-        for ruta in rutas:
-            ruta_dict = {
-                'id': ruta.id,
-                'estado': ruta.estado.value,
-                'repartidor_chat_id': ruta.repartidor_chat_id,
-                'fecha': ruta.fecha.strftime('%Y-%m-%d'),
-                'total_paradas': len(ruta.paradas),
-                'distancia_total_km': ruta.distancia_total_km,
-                'tiempo_total_minutos': ruta.tiempo_total_minutos,
-                'hora_inicio_estimada': ruta.hora_inicio_estimada,
-                'hora_fin_estimada': ruta.hora_fin_estimada,
-                'paradas_completadas': sum(1 for p in ruta.paradas if p.completada),
-                'progreso': (sum(1 for p in ruta.paradas if p.completada) / len(ruta.paradas)) * 100 if ruta.paradas else 0
-            }
-            rutas_json.append(ruta_dict)
-        
-        return jsonify({
-            "success": True,
-            "rutas": rutas_json,
-            "total": len(rutas_json)
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@main.route("/api/ruta/<ruta_id>/detalles")
-def api_ruta_detalles(ruta_id):
-    """API para obtener detalles completos de una ruta"""
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        ruta = loop.run_until_complete(rutas_service.obtener_ruta(ruta_id))
-        if not ruta:
-            return jsonify({"error": "Ruta no encontrada"}), 404
-        
-        # Serializar paradas
-        paradas_json = []
-        for parada in ruta.paradas:
-            parada_dict = {
-                'id': parada.id,
-                'pedido_id': parada.pedido_id,
-                'tipo': parada.tipo.value,
-                'cliente_nombre': parada.cliente_nombre,
-                'cliente_telefono': parada.cliente_telefono,
-                'direccion': parada.direccion,
-                'latitud': parada.latitud,
-                'longitud': parada.longitud,
-                'hora_estimada': parada.hora_estimada,
-                'tiempo_estimado_parada': parada.tiempo_estimado_parada,
-                'notas': parada.notas,
-                'completada': parada.completada,
-                'hora_completada': parada.hora_completada.strftime('%H:%M') if parada.hora_completada else None,
-                'orden_en_ruta': parada.orden_en_ruta
-            }
-            paradas_json.append(parada_dict)
-        
-        ruta_dict = {
-            'id': ruta.id,
-            'estado': ruta.estado.value,
-            'repartidor_chat_id': ruta.repartidor_chat_id,
-            'fecha': ruta.fecha.strftime('%Y-%m-%d'),
-            'paradas': paradas_json,
-            'distancia_total_km': ruta.distancia_total_km,
-            'tiempo_total_minutos': ruta.tiempo_total_minutos,
-            'hora_inicio_estimada': ruta.hora_inicio_estimada,
-            'hora_fin_estimada': ruta.hora_fin_estimada,
-            'hora_inicio_real': ruta.hora_inicio_real.strftime('%H:%M') if ruta.hora_inicio_real else None,
-            'hora_fin_real': ruta.hora_fin_real.strftime('%H:%M') if ruta.hora_fin_real else None,
-            'url_mapa': ruta.url_mapa,
-            'progreso': (sum(1 for p in ruta.paradas if p.completada) / len(ruta.paradas)) * 100 if ruta.paradas else 0
-        }
-        
-        return jsonify({
-            "success": True,
-            "ruta": ruta_dict
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@main.route("/api/estadisticas-rutas")
-def api_estadisticas_rutas():
-    """API para obtener estadísticas generales de rutas"""
-    try:
-        fecha_fin = date.today()
-        fecha_inicio = fecha_fin - timedelta(days=30)  # Últimos 30 días
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        if not rutas_service:
-            inicializar_rutas_service(db.session, telegram_service, email_service)
-        
-        estadisticas = loop.run_until_complete(
-            rutas_service.obtener_estadisticas_rutas(fecha_inicio, fecha_fin)
-        )
-        
-        return jsonify({
-            "success": True,
-            "estadisticas": estadisticas,
-            "periodo": {
-                "inicio": fecha_inicio.strftime('%Y-%m-%d'),
-                "fin": fecha_fin.strftime('%Y-%m-%d')
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# === TRACKING PARA CLIENTES ===
-
-@main.route("/rastrear/<int:pedido_id>")
-def rastrear_pedido(pedido_id):
-    """Página de tracking para clientes"""
-    try:
-        pedido = Pedido.query.get_or_404(pedido_id)
-        
-        # Buscar si el pedido está en alguna ruta activa
-        ruta_info = None
-        if pedido.estado in ['Recolectado', 'EnProceso', 'Listo']:
-            # Buscar en rutas activas
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            fecha_hoy = date.today()
-            rutas_hoy = loop.run_until_complete(rutas_service.obtener_rutas_del_dia(fecha_hoy))
-            
-            for ruta in rutas_hoy:
-                for parada in ruta.paradas:
-                    if parada.pedido_id == pedido_id:
-                        ruta_info = {
-                            'ruta_id': ruta.id,
-                            'estado_ruta': ruta.estado.value,
-                            'parada_completada': parada.completada,
-                            'hora_estimada': parada.hora_estimada,
-                            'tipo_parada': parada.tipo.value,
-                            'progreso_ruta': (sum(1 for p in ruta.paradas if p.completada) / len(ruta.paradas)) * 100
-                        }
-                        break
-        
-        return render_template("tracking.html", pedido=pedido, ruta_info=ruta_info)
-        
-    except Exception as e:
-        flash(f"Error cargando información del pedido: {str(e)}", "error")
-        return redirect(url_for("main.home"))
-
-# === FUNCIÓN PARA ENVIAR NOTIFICACIONES AUTOMÁTICAS ===
-
-def enviar_notificacion_pedido_confirmado(pedido_id):
-    """Función para enviar notificaciones cuando se confirma un pedido"""
-    try:
-        # Obtener datos del pedido y usuario
-        result = db.session.query(Pedido, Usuario).join(Usuario).filter(Pedido.id == pedido_id).first()
-        if not result:
-            return False
-        
-        pedido, usuario = result
-        
-        # Preparar datos para notificaciones
-        pedido_dict = {
-            'id': pedido.id,
-            'fecha_recoleccion': pedido.fecha_recoleccion.strftime('%d/%m/%Y'),
-            'fecha_entrega': pedido.fecha_entrega.strftime('%d/%m/%Y'),
-            'direccion': pedido.direccion,
-            'precio_total': pedido.precio_total,
-            'notas': pedido.notas,
-            'items': []
-        }
-        
-        # Agregar items del pedido
-        for item in pedido.items:
-            pedido_dict['items'].append({
-                'tipo_prenda': item.tipo_prenda.nombre,
-                'cantidad': item.cantidad,
-                'subtotal': item.subtotal
-            })
-        
-        usuario_dict = {
-            'nombre': usuario.nombre,
-            'email': usuario.email
-        }
-        
-        # CORRECCIÓN: Verificar si email_service tiene el método correcto
-        try:
-            # Intentar enviar email (puede fallar si el servicio no está configurado)
-            email_enviado = True  # Por ahora marcamos como exitoso
-            print(f"📧 Email enviado para pedido #{pedido.id}")
-        except Exception as email_error:
-            logger.warning(f"No se pudo enviar email: {email_error}")
-            email_enviado = False
-        
-        # CORRECCIÓN: Verificar si telegram_service está disponible
-        try:
-            # Notificar a admins por Telegram
-            mensaje_admin = f"""🆕 *NUEVO PEDIDO*
-            
-📋 *Pedido #{pedido.id}*
-👤 *Cliente:* {usuario.nombre}
-📱 *Teléfono:* {usuario.telefono}
-📍 *Dirección:* {pedido.direccion}
-📅 *Recolección:* {pedido.fecha_recoleccion.strftime('%d/%m/%Y')}
-📅 *Entrega:* {pedido.fecha_entrega.strftime('%d/%m/%Y')}
-💰 *Total:* ${pedido.precio_total}
-
-📦 *Prendas:*
-{chr(10).join([f"• {item.tipo_prenda.nombre}: {item.cantidad} kg" for item in pedido.items])}
-"""
-            print(f"📱 Telegram notificado para pedido #{pedido.id}")
-            telegram_enviado = True
-            
-        except Exception as telegram_error:
-            logger.warning(f"No se pudo enviar telegram: {telegram_error}")
-            telegram_enviado = False
-        
-        return email_enviado and telegram_enviado
-        
-    except Exception as e:
-        logger.error(f"Error enviando notificaciones: {e}")
-        return False
-
-# Modificar la función confirmar_pedido existente para incluir notificaciones
 @main.route("/confirmar-pedido", methods=["POST"])
 def confirmar_pedido():
     """Confirmar pedido con notificaciones automáticas"""
@@ -1016,7 +602,7 @@ def confirmar_pedido():
         # Crear los items del pedido
         items = json.loads(data["items"]) if isinstance(data["items"], str) else data["items"]
         for item in items:
-            item_pedido = ItemPedido(
+            item_pedido = PedidoItem(
                 pedido_id=nuevo_pedido.id,
                 tipo_prenda_id=item["tipo_prenda_id"],
                 cantidad=item["cantidad"],
@@ -1027,42 +613,53 @@ def confirmar_pedido():
         
         db.session.commit()
 
-        # Notificación Telegram
+        # Notificación Telegram simple
         try:
-            import sys
-            sys.path.append('.')
-            from bot_completo import notificar_pedido_flask
             from app.models import Usuario
-            
-            # Obtener usuario para notificación
             usuario_actual = Usuario.query.get(session["usuario_id"])
             nombre_usuario = usuario_actual.nombre if usuario_actual else "Usuario"
             
-            result = notificar_pedido_flask(
-                nuevo_pedido.id,
-                nombre_usuario,
-                direccion_texto,
-                nuevo_pedido.precio_total
-            )
-            
-            print(f"✅ Resultado notificación Telegram: {result}")
+            # Intentar notificar por Telegram si está disponible
+            try:
+                from bot_completo import notificar_pedido_flask
+                result = notificar_pedido_flask(
+                    nuevo_pedido.id,
+                    nombre_usuario,
+                    direccion_texto,
+                    nuevo_pedido.precio_total
+                )
+                logger.info(f"Telegram notification result: {result}")
+            except ImportError:
+                logger.info("Bot de Telegram no disponible")
+            except Exception as e:
+                logger.error(f"Error en notificación Telegram: {e}")
             
         except Exception as e:
-            print(f"❌ Error Telegram completo: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error en notificaciones: {e}")
         
-        # ¡NUEVO! Enviar notificaciones automáticas
-        #try:
-        #    enviar_notificacion_pedido_confirmado(nuevo_pedido.id)
-        #except Exception as e:
-        #    logger.error(f"Error enviando notificaciones: {e}")
-        #    # No fallar el pedido por errores de notificación
-        
-        flash("¡Pedido creado exitosamente! Te hemos enviado un email de confirmación.", "success")
+        flash("¡Pedido creado exitosamente!", "success")
         return jsonify({"success": True, "pedido_id": nuevo_pedido.id})
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error confirmando pedido: {e}")
         return jsonify({"error": str(e)}), 500
+
+# === TRACKING PARA CLIENTES ===
+
+@main.route("/rastrear/<int:pedido_id>")
+def rastrear_pedido(pedido_id):
+    """Página de tracking para clientes"""
+    try:
+        pedido = Pedido.query.get_or_404(pedido_id)
+        
+        # Por ahora solo mostrar información básica del pedido
+        # En el futuro se puede integrar con el sistema de rutas
+        ruta_info = None
+        
+        return render_template("tracking.html", pedido=pedido, ruta_info=ruta_info)
+        
+    except Exception as e:
+        flash(f"Error cargando información del pedido: {str(e)}", "error")
+        return redirect(url_for("main.home"))
+    

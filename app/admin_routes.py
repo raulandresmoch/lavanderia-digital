@@ -1,294 +1,501 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
-from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, Admin, Pedido, Usuario, TipoPrenda, EstadisticasPedidos, DireccionUsuario
-from datetime import datetime, timedelta
-from functools import wraps
-import logging
+# admin_routes.py - Rutas admin actualizadas con Google Maps
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, flash
+from datetime import datetime, date, timedelta
+from app.models import db, Pedido, Usuario, Admin
+from app.extensions import db
+import requests
+import os
+from google_maps_utils import GoogleMapsIntegration, enviar_ruta_con_mapas_telegram
 
-# Configurar logger
-logger = logging.getLogger(__name__)
-
-admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 def admin_required(f):
-    """Decorador para requerir autenticación de admin"""
+    """Decorator para requerir autenticación de admin"""
+    from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if "admin_id" not in session:
-            return redirect(url_for("admin.login"))
+        if 'admin_id' not in session:
+            return redirect(url_for('admin.login'))
         return f(*args, **kwargs)
     return decorated_function
 
-# === AUTENTICACIÓN ADMIN ===
-
-@admin_bp.route("/login", methods=["GET", "POST"])
+@admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        usuario = request.form["usuario"]
-        contrasena = request.form["contrasena"]
-
-        admin = Admin.query.filter_by(usuario=usuario, activo=True).first()
-
-        if admin and check_password_hash(admin.contrasena, contrasena):
-            session["admin_id"] = admin.id
-            session["admin_nombre"] = admin.nombre
-            return redirect(url_for("admin.dashboard"))
-
-        flash("Credenciales inválidas.", "error")
+    """Login de administradores"""
+    if request.method == 'POST':
+        usuario = request.form.get('usuario')
+        contrasena = request.form.get('contrasena')
+        
+        admin = Admin.query.filter_by(usuario=usuario).first()
+        
+        if admin and admin.verificar_contrasena(contrasena):
+            session['admin_id'] = admin.id
+            session['admin_usuario'] = admin.usuario
+            session['admin_nombre'] = admin.nombre
+            return redirect(url_for('admin.dashboard'))
+        else:
+            flash('Credenciales incorrectas', 'error')
     
-    return render_template("admin/login.html")
+    return render_template('admin/login.html')
 
-@admin_bp.route("/logout")
+@admin_bp.route('/logout')
 def logout():
-    session.pop("admin_id", None)
-    session.pop("admin_nombre", None)
-    return redirect(url_for("admin.login"))
+    """Logout de administradores"""
+    session.clear()
+    return redirect(url_for('admin.login'))
 
-# === DASHBOARD PRINCIPAL ===
-
-@admin_bp.route("/")
-@admin_bp.route("/dashboard")
+@admin_bp.route('/dashboard')
 @admin_required
 def dashboard():
-    # Estadísticas del día
-    hoy = datetime.now().date()
+    """Dashboard principal del admin"""
+    # Estadísticas básicas
+    today = date.today()
     
     # Pedidos de hoy
-    pedidos_hoy = Pedido.query.filter(Pedido.fecha_recoleccion == hoy).all()
-    entregas_hoy = Pedido.query.filter(Pedido.fecha_entrega == hoy).all()
+    pedidos_hoy = Pedido.query.filter(
+        Pedido.fecha_recoleccion == today
+    ).count()
     
-    # Estadísticas generales
-    stats = {
-        'pedidos_hoy': len(pedidos_hoy),
-        'entregas_hoy': len(entregas_hoy),
-        'ingresos_mes': EstadisticasPedidos.ingresos_mes_actual(),
-        'estados': EstadisticasPedidos.pedidos_por_estado()
-    }
+    entregas_hoy = Pedido.query.filter(
+        Pedido.fecha_entrega == today
+    ).count()
     
-    # Pedidos recientes (últimos 10)
+    # Ingresos del mes
+    inicio_mes = today.replace(day=1)
+    ingresos_mes = db.session.query(db.func.sum(Pedido.precio_total)).filter(
+        Pedido.creado >= inicio_mes,
+        Pedido.estado.in_(['Entregado', 'Listo'])
+    ).scalar() or 0
+    
+    # Pedidos recientes
     pedidos_recientes = Pedido.query.order_by(Pedido.creado.desc()).limit(10).all()
     
-    return render_template("admin/dashboard.html", 
+    stats = {
+        'pedidos_hoy': pedidos_hoy,
+        'entregas_hoy': entregas_hoy,
+        'ingresos_mes': ingresos_mes
+    }
+    
+    return render_template('admin/dashboard.html', 
                          stats=stats, 
-                         pedidos_hoy=pedidos_hoy,
-                         entregas_hoy=entregas_hoy,
                          pedidos_recientes=pedidos_recientes)
 
-# === GESTIÓN DE PEDIDOS ===
-
-@admin_bp.route("/pedidos")
+@admin_bp.route('/pedidos')
 @admin_required
 def pedidos():
-    # Filtros
-    fecha_filtro = request.args.get('fecha')
-    estado_filtro = request.args.get('estado')
-    
-    query = Pedido.query
-    
-    if fecha_filtro:
-        fecha = datetime.strptime(fecha_filtro, '%Y-%m-%d').date()
-        query = query.filter(
-            (Pedido.fecha_recoleccion == fecha) | 
-            (Pedido.fecha_entrega == fecha)
-        )
-    
-    if estado_filtro and estado_filtro != 'todos':
-        query = query.filter(Pedido.estado == estado_filtro)
-    
-    pedidos = query.order_by(Pedido.creado.desc()).all()
-    
-    # Estados disponibles para el filtro
-    estados = ['todos', 'Solicitado', 'Recolectado', 'EnProceso', 'Listo', 'Entregado']
-    
-    return render_template("admin/pedidos.html", 
-                         pedidos=pedidos, 
-                         estados=estados,
-                         fecha_filtro=fecha_filtro,
-                         estado_filtro=estado_filtro)
+    """Gestión de todos los pedidos"""
+    pedidos = Pedido.query.order_by(Pedido.creado.desc()).all()
+    return render_template('admin/pedidos.html', pedidos=pedidos)
 
-@admin_bp.route("/pedido/<int:pedido_id>")
-@admin_required
-def detalle_pedido(pedido_id):
-    pedido = Pedido.query.get_or_404(pedido_id)
-    return render_template("admin/detalle_pedido.html", pedido=pedido)
-
-@admin_bp.route("/api/actualizar-estado", methods=["POST"])
-@admin_required
-def actualizar_estado():
-    try:
-        data = request.get_json()
-        pedido_id = data.get("pedido_id")
-        nuevo_estado = data.get("estado")
-        
-        pedido = Pedido.query.get(pedido_id)
-        if not pedido:
-            return jsonify({"error": "Pedido no encontrado"}), 404
-        
-        pedido.estado = nuevo_estado
-        pedido.actualizado = datetime.utcnow()
-        
-        db.session.commit()
-        
-        return jsonify({
-            "success": True, 
-            "mensaje": f"Estado actualizado a {nuevo_estado}",
-            "pedido_id": pedido_id,
-            "nuevo_estado": nuevo_estado
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error actualizando estado: {e}")
-        return jsonify({"error": str(e)}), 500
-
-# === RUTAS DIARIAS ===
-
-@admin_bp.route("/rutas")
+@admin_bp.route('/rutas')
 @admin_required
 def rutas():
-    fecha_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
-    try:
-        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-    except ValueError:
-        fecha = datetime.now().date()
-        fecha_str = fecha.strftime('%Y-%m-%d')
+    """Gestión de rutas con Google Maps integrado"""
+    # Obtener fecha del parámetro o usar hoy
+    fecha_str = request.args.get('fecha')
+    if fecha_str:
+        try:
+            fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_obj = date.today()
+    else:
+        fecha_obj = date.today()
     
-    # Recolecciones del día
-    recolecciones = Pedido.query.filter(
-        Pedido.fecha_recoleccion == fecha,
-        Pedido.estado.in_(['Solicitado', 'Recolectado'])
-    ).order_by(Pedido.direccion).all()
+       # Obtener pedidos para recolección con información del usuario
+    recolecciones = Pedido.query.join(Usuario).filter(
+        Pedido.fecha_recoleccion == fecha_obj,
+        Pedido.estado == 'Solicitado'
+    ).all()
     
-    # Entregas del día
-    entregas = Pedido.query.filter(
-        Pedido.fecha_entrega == fecha,
-        Pedido.estado.in_(['Listo', 'Entregado'])
-    ).order_by(Pedido.direccion).all()
-    
-    return render_template("admin/rutas.html", 
-                         fecha=fecha,
-                         fecha_str=fecha_str,
+    # Obtener pedidos para entrega con información del usuario
+    entregas = Pedido.query.join(Usuario).filter(
+        Pedido.fecha_entrega == fecha_obj,
+        Pedido.estado == 'Listo'
+    ).all()
+    return render_template('admin/rutas.html', 
+                         fecha=fecha_obj,
+                         fecha_str=fecha_obj.strftime('%Y-%m-%d'),
                          recolecciones=recolecciones,
                          entregas=entregas)
 
-@admin_bp.route("/api/generar-ruta-optimizada", methods=["POST"])
+@admin_bp.route('/api/generar-ruta-optimizada', methods=['POST'])
 @admin_required
 def generar_ruta_optimizada():
-    """Generar ruta optimizada básica (por zona)"""
+    """Generar rutas optimizadas con integración de Google Maps"""
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({"error": "No se recibieron datos"}), 400
-            
-        fecha_str = data.get("fecha")
-        tipo = data.get("tipo")  # 'recoleccion' o 'entrega'
+        fecha_str = data.get('fecha')
+        tipo = data.get('tipo')  # 'recoleccion' o 'entrega'
         
+        # Validar parámetros
         if not fecha_str or not tipo:
-            return jsonify({"error": "Faltan parámetros requeridos"}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Faltan parámetros requeridos'
+            }), 400
         
+        # Parsear fecha
         try:
-            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         except ValueError:
-            return jsonify({"error": "Formato de fecha inválido"}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Formato de fecha inválido'
+            }), 400
         
-        logger.info(f"Generando ruta para {fecha} tipo {tipo}")
-        
+        # Obtener pedidos según el tipo
         # Obtener pedidos según el tipo
         if tipo == 'recoleccion':
             pedidos = Pedido.query.filter(
-                Pedido.fecha_recoleccion == fecha,
+                Pedido.fecha_recoleccion == fecha_obj,
                 Pedido.estado == 'Solicitado'
             ).all()
         elif tipo == 'entrega':
             pedidos = Pedido.query.filter(
-                Pedido.fecha_entrega == fecha,
+                Pedido.fecha_entrega == fecha_obj,
                 Pedido.estado == 'Listo'
             ).all()
         else:
-            return jsonify({"error": "Tipo de ruta inválido"}), 400
-        
-        logger.info(f"Encontrados {len(pedidos)} pedidos para procesar")
-        
+            return jsonify({
+                'success': False,
+                'error': 'Tipo de ruta inválido'
+            }), 400
+
         if not pedidos:
             return jsonify({
-                "success": True,
-                "rutas": {},
-                "total_pedidos": 0,
-                "mensaje": f"No hay pedidos de {tipo} para esta fecha"
+                'success': True,
+                'rutas': {},
+                'total_pedidos': 0,
+                'mensaje': f'No hay pedidos de {tipo} para {fecha_str}'
             })
+
+        # Debug: imprimir información de pedidos
+        print(f"📊 Encontrados {len(pedidos)} pedidos de {tipo}")
+        for p in pedidos:
+            print(f"  - Pedido #{p.id}: {p.usuario.nombre} - {p.direccion}")
         
-        # Agrupación básica por zona (primeras 3 palabras de la dirección)
-        rutas_por_zona = {}
+        # Generar rutas optimizadas por zona
+        rutas_por_zona = agrupar_pedidos_por_zona(pedidos)
         
-        for pedido in pedidos:
-            try:
-                # Crear zona basada en las primeras palabras de la dirección
-                palabras_direccion = pedido.direccion.split()
-                zona = ' '.join(palabras_direccion[:3]) if len(palabras_direccion) >= 3 else pedido.direccion
-                
-                if zona not in rutas_por_zona:
-                    rutas_por_zona[zona] = []
-                
-                # Obtener información del usuario
-                usuario = pedido.usuario
-                telefono = usuario.telefono if usuario.telefono else 'No registrado'
-                
-                pedido_info = {
-                    'id': pedido.id,
-                    'direccion': pedido.direccion,
-                    'cliente': usuario.nombre,
-                    'telefono': telefono,
-                    'notas': pedido.notas or '',
-                    'total': float(pedido.precio_total),
-                    'estado': pedido.estado
-                }
-                
-                rutas_por_zona[zona].append(pedido_info)
-                
-            except Exception as e:
-                logger.error(f"Error procesando pedido {pedido.id}: {e}")
-                continue
+        # Convertir a formato para respuesta con Google Maps
+        # Convertir a formato para respuesta con Google Maps
+        rutas_response = {}
+        total_estimaciones = {
+            'tiempo_total': 0,
+            'distancia_total': 0,
+            'paradas_total': 0
+        }
         
-        logger.info(f"Rutas generadas: {len(rutas_por_zona)} zonas")
+        for zona, pedidos_zona in rutas_por_zona.items():
+            # CORRECCIÓN: Los pedidos ya son diccionarios, no necesitan conversión
+            pedidos_dict = pedidos_zona  # Ya son diccionarios desde agrupar_pedidos_por_zona
+            
+            # Generar información de Google Maps para esta zona
+            estimacion_zona = GoogleMapsIntegration.generar_estimacion_tiempo(pedidos_dict)
+            url_ruta_zona = GoogleMapsIntegration.generar_ruta_completa(pedidos_dict) if len(pedidos_dict) > 1 else None
+            
+            rutas_response[zona] = {
+                'pedidos': pedidos_dict,
+                'estimaciones': estimacion_zona,
+                'url_google_maps': url_ruta_zona,
+                'total_paradas': len(pedidos_dict)
+            }
+            
+            # Sumar a totales
+            total_estimaciones['tiempo_total'] += estimacion_zona['tiempo_total']
+            total_estimaciones['distancia_total'] += estimacion_zona['distancia_total']
+            total_estimaciones['paradas_total'] += estimacion_zona['paradas']
+        
+        # Generar URL para ruta completa del día
+        todos_pedidos = []
+        for zona_data in rutas_response.values():
+            todos_pedidos.extend(zona_data['pedidos'])
+        
+        url_ruta_completa = GoogleMapsIntegration.generar_ruta_completa(todos_pedidos) if len(todos_pedidos) > 1 else None
         
         return jsonify({
-            "success": True,
-            "rutas": rutas_por_zona,
-            "total_pedidos": len(pedidos),
-            "tipo": tipo,
-            "fecha": fecha_str
+            'success': True,
+            'rutas': rutas_response,
+            'total_pedidos': len(pedidos),
+            'tipo': tipo,
+            'fecha': fecha_str,
+            'estimaciones_totales': total_estimaciones,
+            'url_ruta_completa_dia': url_ruta_completa,
+            'total_zonas': len(rutas_response)
         })
         
     except Exception as e:
-        logger.error(f"Error en generar_ruta_optimizada: {e}")
+        print(f"❌ Error generando ruta: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": f"Error interno: {str(e)}"}), 500
+        
+        return jsonify({
+            'success': False,
+            'error': f'Error interno: {str(e)}'
+        }), 500
 
-# === REPORTES ===
-
-@admin_bp.route("/reportes")
+@admin_bp.route('/api/enviar-ruta-telegram', methods=['POST'])
 @admin_required
-def reportes():
-    # Estadísticas del último mes
-    fecha_inicio = datetime.now() - timedelta(days=30)
-    
-    pedidos_mes = Pedido.query.filter(Pedido.creado >= fecha_inicio).count()
-    ingresos_mes = EstadisticasPedidos.ingresos_mes_actual()
-    
-    # Pedidos por día (últimos 7 días)
-    pedidos_por_dia = []
-    for i in range(7):
-        fecha = datetime.now().date() - timedelta(days=i)
-        count = Pedido.query.filter(Pedido.fecha_recoleccion == fecha).count()
-        pedidos_por_dia.append({
-            'fecha': fecha.strftime('%d/%m'),
-            'cantidad': count
+def enviar_ruta_telegram():
+    """Enviar ruta completa por Telegram con Google Maps"""
+    try:
+        data = request.get_json()
+        repartidor_chat_id = data.get('repartidor_chat_id')
+        ruta_data = data.get('ruta_data')
+        ruta_id = data.get('ruta_id', f"RUTA_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        
+        if not repartidor_chat_id or not ruta_data:
+            return jsonify({
+                'success': False,
+                'error': 'Faltan parámetros requeridos'
+            }), 400
+        
+        # Obtener información del repartidor (simulado por ahora)
+        repartidor_nombre = f"Repartidor_{repartidor_chat_id[-4:]}"
+        
+        # Preparar datos para el envío con Google Maps
+        ruta_para_envio = {
+            'tipo': ruta_data.get('tipo', 'recoleccion'),
+            'fecha': ruta_data.get('fecha', datetime.now().strftime('%Y-%m-%d')),
+            'rutas': {},
+            'total_pedidos': ruta_data.get('total_pedidos', 0),
+            'admin_chat_id': os.getenv('TELEGRAM_ADMIN_CHATS', 'Admin')
+        }
+        
+        # Convertir formato de rutas para Google Maps
+        for zona, pedidos in ruta_data.get('rutas', {}).items():
+            ruta_para_envio['rutas'][zona] = pedidos
+        
+        print(f"🔍 DEBUG ruta_data type: {type(ruta_data)}")
+        print(f"🔍 DEBUG ruta_data keys: {ruta_data.keys() if hasattr(ruta_data, 'keys') else 'No keys'}")
+        print(f"🔍 DEBUG ruta_data: {ruta_data}")
+
+        # Enviar ruta con integración de Google Maps
+        resultado = enviar_ruta_con_mapas_telegram(
+            repartidor_chat_id, 
+            ruta_data, 
+            repartidor_nombre
+        )
+        
+        if resultado:
+            # Registrar envío en base de datos (opcional)
+            # TODO: Crear tabla para registrar envíos de rutas
+            
+            return jsonify({
+                'success': True,
+                'mensaje': f'Ruta enviada exitosamente a {repartidor_nombre}',
+                'ruta_id': ruta_id,
+                'repartidor_chat_id': repartidor_chat_id,
+                'total_pedidos': ruta_para_envio['total_pedidos']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Error enviando mensaje por Telegram'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error enviando ruta por Telegram: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': f'Error interno: {str(e)}'
+        }), 500
+
+@admin_bp.route('/api/repartidores-disponibles', methods=['GET'])
+@admin_required
+def repartidores_disponibles():
+    """Obtener lista de repartidores disponibles"""
+    try:
+        # Por ahora simulamos repartidores
+        # En producción esto vendría de una tabla de repartidores
+        repartidores_simulados = [
+            {
+                'chat_id': os.getenv('TELEGRAM_ADMIN_CHATS', '123456789'),
+                'nombre': 'Repartidor Test',
+                'activo': True,
+                'estado': 'disponible'
+            },
+            {
+                'chat_id': '987654321',
+                'nombre': 'Juan Pérez',
+                'activo': True,
+                'estado': 'disponible'
+            },
+            {
+                'chat_id': '456789123',
+                'nombre': 'María García',
+                'activo': False,
+                'estado': 'desconectado'
+            }
+        ]
+        
+        return jsonify({
+            'success': True,
+            'repartidores': repartidores_simulados
         })
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo repartidores: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Error interno: {str(e)}'
+        }), 500
+
+@admin_bp.route('/api/actualizar-estado', methods=['POST'])
+@admin_required
+def actualizar_estado():
+    """Actualizar estado de un pedido"""
+    try:
+        data = request.get_json()
+        pedido_id = data.get('pedido_id')
+        nuevo_estado = data.get('estado')
+        
+        if not pedido_id or not nuevo_estado:
+            return jsonify({
+                'success': False,
+                'error': 'Faltan parámetros requeridos'
+            }), 400
+        
+        pedido = Pedido.query.get(pedido_id)
+        if not pedido:
+            return jsonify({
+                'success': False,
+                'error': 'Pedido no encontrado'
+            }), 404
+        
+        pedido.estado = nuevo_estado
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'mensaje': f'Estado actualizado a {nuevo_estado}'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error actualizando estado: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Error interno: {str(e)}'
+        }), 500
+
+@admin_bp.route('/telegram')
+@admin_required
+def telegram():
+    """Panel de configuración de Telegram"""
+    # Obtener configuración actual
+    config = {
+        'bot_token': os.getenv('TELEGRAM_BOT_TOKEN', 'No configurado'),
+        'admin_chats': os.getenv('TELEGRAM_ADMIN_CHATS', 'No configurado'),
+        'openai_key': 'Configurado' if os.getenv('OPENAI_API_KEY') else 'No configurado'
+    }
     
-    pedidos_por_dia.reverse()
+    return render_template('admin/telegram.html', config=config)
+
+# Funciones auxiliares
+
+# Líneas 393-420 aproximadamente en admin_routes.py
+def agrupar_pedidos_por_zona(pedidos):
+    """Agrupar pedidos por zona geográfica"""
+    rutas_por_zona = {}
     
-    return render_template("admin/reportes.html",
-                         pedidos_mes=pedidos_mes,
-                         ingresos_mes=ingresos_mes,
-                         pedidos_por_dia=pedidos_por_dia)
+    for pedido in pedidos:
+        # Determinar zona basada en la dirección
+        zona = determinar_zona_por_direccion(pedido.direccion)
+        
+        if zona not in rutas_por_zona:
+            rutas_por_zona[zona] = []
+        
+        # CORRECCIÓN: Convertir el objeto pedido a diccionario
+        pedido_dict = {
+            'id': pedido.id,
+            'cliente': pedido.usuario.nombre,
+            'telefono': pedido.usuario.telefono or 'No disponible',
+            'direccion': pedido.direccion,
+            'latitud': pedido.latitud or 19.4326,
+            'longitud': pedido.longitud or -99.1332,
+            'notas': pedido.notas or '',
+            'precio': float(pedido.precio_total),
+            'peso': float(pedido.peso_estimado or 0)
+        }
+        
+        rutas_por_zona[zona].append(pedido_dict)
+    
+    # Optimizar orden dentro de cada zona
+    for zona in rutas_por_zona:
+        rutas_por_zona[zona] = optimizar_orden_zona(rutas_por_zona[zona])
+    
+    return rutas_por_zona
+
+def determinar_zona_por_direccion(direccion):
+    """Determinar zona geográfica basada en la dirección"""
+    direccion_lower = direccion.lower()
+    
+    # Zonas de Ciudad de México
+    zonas = {
+        'Roma Norte': ['roma norte', 'roma', 'condesa'],
+        'Polanco': ['polanco', 'anzures', 'nueva anzures'],
+        'Del Valle': ['del valle', 'narvarte', 'piedad narvarte'],
+        'Centro': ['centro', 'histórico', 'alameda'],
+        'Santa Fe': ['santa fe', 'álvaro obregón'],
+        'Zona Sur': ['coyoacán', 'san ángel', 'pedregal'],
+        'Zona Norte': ['lindavista', 'gustavo a. madero', 'villa'],
+        'Zona Oriente': ['iztapalapa', 'iztacalco', 'venustiano carranza'],
+        'Otras Zonas': []  # Default
+    }
+    
+    for zona, keywords in zonas.items():
+        for keyword in keywords:
+            if keyword in direccion_lower:
+                return zona
+    
+    return 'Otras Zonas'
+
+# Líneas 470-510 aproximadamente en admin_routes.py
+def optimizar_orden_zona(pedidos_zona):
+    """Optimizar el orden de los pedidos dentro de una zona"""
+    if len(pedidos_zona) <= 1:
+        return pedidos_zona
+    
+    # CORRECCIÓN: Los pedidos ya son diccionarios, no objetos SQLAlchemy
+    pedidos_optimizados = []
+    pedidos_restantes = pedidos_zona.copy()
+    
+    # Comenzar con el primer pedido
+    actual = pedidos_restantes.pop(0)
+    pedidos_optimizados.append(actual)
+    
+    # Agregar el pedido más cercano en cada iteración
+    while pedidos_restantes:
+        lat_actual = actual['latitud']
+        lng_actual = actual['longitud']
+        
+        distancia_minima = float('inf')
+        pedido_mas_cercano = None
+        
+        for pedido in pedidos_restantes:
+            lat_pedido = pedido['latitud']
+            lng_pedido = pedido['longitud']
+            
+            distancia = GoogleMapsIntegration.calcular_distancia_aproximada(
+                lat_actual, lng_actual, lat_pedido, lng_pedido
+            )
+            
+            if distancia < distancia_minima:
+                distancia_minima = distancia
+                pedido_mas_cercano = pedido
+        
+        if pedido_mas_cercano:
+            pedidos_restantes.remove(pedido_mas_cercano)
+            pedidos_optimizados.append(pedido_mas_cercano)
+            actual = pedido_mas_cercano
+    
+    return pedidos_optimizados
+
+def generar_codigo_ruta(tipo, fecha):
+    """Generar código único para la ruta"""
+    fecha_str = fecha.strftime('%Y%m%d') if hasattr(fecha, 'strftime') else fecha
+    timestamp = datetime.now().strftime('%H%M%S')
+    return f"{tipo.upper()}_{fecha_str}_{timestamp}"
